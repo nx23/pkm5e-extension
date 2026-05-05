@@ -1,0 +1,87 @@
+/**
+ * Pokemon 5e Extension Styles
+ * Visual enhancements for rollable elements
+ */
+
+/* Slideshow animations */
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+/* Rollable elements */
+.poke5e-rollable {
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.poke5e-rollable:hover {
+  transform: scale(1.05);
+  filter: brightness(1.1);
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.5);
+  border-radius: 2px;
+}
+
+/* Hover class additions */
+.poke5e-hover {
+  position: relative;
+}
+
+.poke5e-hover::after {
+  content: '🎲';
+  position: absolute;
+  right: -20px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  font-size: 14px;
+}
+
+.poke5e-hover:hover::after {
+  opacity: 1;
+}
+
+/* Notifications */
+.poke5e-notification {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  animation: slideIn 0.3s ease;
+}
+
+.poke5e-notification-success {
+  background: #4CAF50;
+  color: white;
+}
+
+.poke5e-notification-error {
+  background: #f44336;
+  color: white;
+}
+
+.poke5e-notification-info {
+  background: #2196F3;
+  color: white;
+}
+
+/* Disable text selection on hover for better UX */
+.poke5e-rollable * {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}

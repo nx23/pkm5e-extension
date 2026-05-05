@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokemon 5e Roll20 Extension</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="popup-container">
+        <header class="header">
+            <h1>🎲 Pokemon 5e Roll20</h1>
+            <p class="subtitle">Bringing the rolls to your campaign</p>
+        </header>
+
+        <main class="content">
+            <!-- Status Section -->
+            <section class="status-section">
+                <h2>Status</h2>
+                <div class="status-grid">
+                    <div class="status-item">
+                        <span class="label">Extension:</span>
+                        <span class="value" id="extension-status">🔍 Checking...</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="label">Roll20 Tab:</span>
+                        <span class="value" id="roll20-status">🔍 Checking...</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section class="settings-section">
+                <h2>Settings</h2>
+                <div class="setting">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="enable-extension" checked>
+                        <span>Enable Extension</span>
+                    </label>
+                </div>
+                <div class="setting">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="sound-enabled">
+                        <span>Sound Notifications</span>
+                    </label>
+                </div>
+                <div class="setting">
+                    <label>
+                        <span>Notification Style:</span>
+                        <select id="notification-style">
+                            <option value="toast">Toast (Pop-up)</option>
+                            <option value="badge">Badge</option>
+                            <option value="console">Console Only</option>
+                        </select>
+                    </label>
+                </div>
+            </section>
+
+            <!-- Quick Actions -->
+            <section class="actions-section">
+                <h2>Quick Actions</h2>
+                <button id="test-connection" class="btn btn-primary">Test Connection</button>
+                <button id="view-history" class="btn btn-secondary">View Roll History</button>
+                <button id="reset-settings" class="btn btn-secondary">Reset Settings</button>
+            </section>
+
+            <!-- Help Section -->
+            <section class="help-section">
+                <h2>How to Use</h2>
+                <ol>
+                    <li>Open Pokemon 5e website (poke5e.app)</li>
+                    <li>Open Roll20 in another tab</li>
+                    <li>Click on any saving throw or skill in Pokemon 5e</li>
+                    <li>The dice command will be injected into Roll20 chat</li>
+                </ol>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <p>Version 1.0 | <a href="#" id="report-bug">Report Bug</a> | <a href="#" id="view-source">View Source</a></p>
+        </footer>
+    </div>
+
+    <script src="../utils/logger.js"></script>
+    <script src="../utils/storage.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>
