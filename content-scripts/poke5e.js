@@ -31,11 +31,65 @@ if (typeof StorageManager === 'undefined') {
 }
 
 // Initialize the extension on poke5e.app
+// Attempt to inject handlers with retry logic (used both on first load and after SPA navigation)
+let navigationRetryTimeout = null;
+
+function attemptInitialization(retries = 0) {
+  const maxRetries = 10;
+  const retryDelay = 1000;
+  retries++;
+  log(`Initialization attempt ${retries}/${maxRetries}...`);
+
+  const debug = DataParser.debugPageStructure();
+
+  const pageReady = debug.indicators.hasAbilityScores ||
+                    debug.indicators.hasSavesSection ||
+                    debug.indicators.hasSkillsSection;
+
+  if (!pageReady) {
+    if (retries < maxRetries) {
+      navigationRetryTimeout = setTimeout(() => attemptInitialization(retries), retryDelay);
+      return;
+    }
+    log('❌ Excedido número máximo de tentativas');
+    return;
+  }
+
+  try {
+    log('✓ Página carregou! Inicializando handlers...');
+    ClickInjector.injectAllHandlers();
+
+    const sheetData = DataParser.getCompleteSheetData();
+    log('Abilities found:', Object.keys(sheetData.abilities).length);
+    log('Saves found:', Object.keys(sheetData.saves).length);
+    log('Skills found:', Object.keys(sheetData.skills).length);
+  } catch (error) {
+    log('Error during initialization:', error);
+  }
+}
+
+// Detect SPA navigation by polling location.href
+// (history.pushState patching doesn't work from isolated worlds in Chrome extensions)
+function setupNavigationDetection() {
+  let lastUrl = location.href;
+
+  setInterval(() => {
+    if (location.href !== lastUrl) {
+      lastUrl = location.href;
+      log('URL changed to', lastUrl, '— reinitializing...');
+      clearTimeout(navigationRetryTimeout);
+      // Give SvelteKit ~800ms to swap the DOM before starting retries
+      navigationRetryTimeout = setTimeout(() => attemptInitialization(0), 800);
+    }
+  }, 500);
+
+  log('Navigation detection active (URL polling)');
+}
+
 async function initializeExtension() {
   // Check if extension is enabled
   try {
     const isEnabled = await StorageManager.getSetting('extensionEnabled', true);
-    
     if (!isEnabled) {
       log('Extension disabled in settings');
       return;
@@ -44,49 +98,10 @@ async function initializeExtension() {
     log('Error checking settings:', error);
   }
 
-  // Wait for page to fully load with retry logic
-  let retries = 0;
-  const maxRetries = 10; // Try up to 10 times
-  const retryDelay = 1000; // Wait 1 second between retries
+  setupNavigationDetection();
 
-  function attemptInitialization() {
-    retries++;
-    log(`Initialization attempt ${retries}/${maxRetries}...`);
-
-    const debug = DataParser.debugPageStructure();
-
-    // Page is ready when the ability scores block (dl dt:has(abbr)) or saves/skills are in the DOM
-    const pageReady = debug.indicators.hasAbilityScores ||
-                      debug.indicators.hasSavesSection ||
-                      debug.indicators.hasSkillsSection;
-
-    if (!pageReady) {
-      if (retries < maxRetries) {
-        setTimeout(attemptInitialization, retryDelay);
-        return;
-      }
-      log('❌ Excedido número máximo de tentativas');
-      return;
-    }
-
-    try {
-      log('✓ Página carregou! Inicializando handlers...');
-      
-      // Inject click handlers
-      ClickInjector.injectAllHandlers();
-      
-      // Log initial sheet data
-      const sheetData = DataParser.getCompleteSheetData();
-      log('Abilities found:', Object.keys(sheetData.abilities).length);
-      log('Saves found:', Object.keys(sheetData.saves).length);
-      log('Skills found:', Object.keys(sheetData.skills).length);
-    } catch (error) {
-      log('Error during initialization:', error);
-    }
-  }
-
-  // Start initialization after 1 second (let React/Vue finish initial render)
-  setTimeout(attemptInitialization, 1000);
+  // Start initialization after 1 second (let SvelteKit finish initial render)
+  setTimeout(() => attemptInitialization(0), 1000);
 }
 
 // Check status with background worker
@@ -185,7 +200,7 @@ function setupDebugInterface() {
     },
     reinject: () => {
       if (ClickInjector) {
-        ClickInjector.reinjectHandlers();
+        attemptInitialization(0);
       } else {
         log('ClickInjector not available');
       }
