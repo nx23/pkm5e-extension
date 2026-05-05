@@ -18,17 +18,37 @@ const ClickInjector = (() => {
     let stat = null;
     let modifier = 0;
 
-    // Parse modifier from element text
-    // Formats: "STR +5", "+5", "STR" with modifier nearby, etc.
-    const modifierMatch = text.match(/([+-]\d+)/);
-    if (modifierMatch) {
-      modifier = parseInt(modifierMatch[1]);
-    }
-
     // Determine which ability/stat
     const abilityMatch = text.match(/(STR|DEX|CON|INT|WIS|CHA)/i);
     if (abilityMatch) {
       stat = abilityMatch[1].toUpperCase();
+    }
+
+    // Parse modifier from element text first
+    const modifierMatch = text.match(/([+-]\d+)/);
+    if (modifierMatch) {
+      modifier = parseInt(modifierMatch[1]);
+    } else if (stat && rollType === 'save') {
+      // If no modifier found in text, try to get from parsed saves
+      const saves = DataParser.parseSaves();
+      if (saves && saves[stat] !== undefined) {
+        modifier = saves[stat];
+        log(`✓ Got ${stat} save modifier from parser: ${modifier}`);
+      }
+    } else if (rollType === 'skill') {
+      // For skills, try to get from parsed skills
+      const skills = DataParser.parseSkills();
+      if (skills) {
+        // Find the skill in the parsed data
+        for (const skillName in skills) {
+          if (text.includes(skillName)) {
+            modifier = skills[skillName];
+            stat = skillName; // Set stat to skill name for better logging
+            log(`✓ Got ${skillName} skill modifier from parser: ${modifier}`);
+            break;
+          }
+        }
+      }
     }
 
     const context = {
