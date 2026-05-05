@@ -52,32 +52,21 @@ async function initializeExtension() {
   function attemptInitialization() {
     retries++;
     log(`Initialization attempt ${retries}/${maxRetries}...`);
-    
-    // DEBUG: Log page structure to understand why parsing is failing
-    if (typeof DataParser !== 'undefined' && DataParser.debugPageStructure) {
-      log('=== DEBUGGING PAGE STRUCTURE ===');
-      const debug = DataParser.debugPageStructure();
-      log('Detected:', debug.pageType);
-      
-      // Check if this is a valid character page
-      if (!debug.isTrainerPage && !debug.isPokemonPage) {
-        log('⚠️ Página ainda não carregou completamente...');
-        log('bodyTextLength:', debug.bodyTextLength);
-        
-        // Retry if page hasn't loaded yet
-        if (retries < maxRetries && debug.bodyTextLength < 500) {
-          log(`Tentando novamente em ${retryDelay}ms...`);
-          setTimeout(attemptInitialization, retryDelay);
-          return;
-        }
-        
-        if (retries >= maxRetries) {
-          log('❌ Excedido número máximo de tentativas');
-          return;
-        }
+
+    const debug = DataParser.debugPageStructure();
+    const pageReady = debug.isTrainerPage || debug.isPokemonPage;
+
+    if (!pageReady) {
+      if (retries < maxRetries && debug.bodyTextLength < 500) {
+        setTimeout(attemptInitialization, retryDelay);
+        return;
+      }
+      if (retries >= maxRetries) {
+        log('❌ Excedido número máximo de tentativas');
+        return;
       }
     }
-    
+
     try {
       log('✓ Página carregou! Inicializando handlers...');
       
@@ -86,12 +75,9 @@ async function initializeExtension() {
       
       // Log initial sheet data
       const sheetData = DataParser.getCompleteSheetData();
-      log('Sheet detected:', sheetData);
-      log('=== EXTRACTED DATA ===');
       log('Abilities found:', Object.keys(sheetData.abilities).length);
       log('Saves found:', Object.keys(sheetData.saves).length);
       log('Skills found:', Object.keys(sheetData.skills).length);
-      log('Full data:', sheetData);
     } catch (error) {
       log('Error during initialization:', error);
     }

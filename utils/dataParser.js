@@ -140,6 +140,23 @@ const DataParser = (() => {
   }
 
   /**
+   * Get the character name for the current page.
+   * - Trainer page: name before "Trainer Id" in body text
+   * - Pokemon page: pokemon name from page title ("Alolan Marowak | Pokemon 5e Reference")
+   *   plus trainer name from heading "X's Pokemon"
+   * @returns {string} Character name
+   */
+  function getCharacterName() {
+    const pageTitle = document.title;
+    
+    // Pokemon page: title is "Alolan Marowak | Pokemon 5e Reference"
+    const name = pageTitle.split('|')[0].trim();
+    log(`✓ Character name (trainer): ${name}`);
+
+    return name;
+  }
+
+  /**
    * Get the current sheet name/title
    * @returns {string} Sheet title
    */
@@ -213,6 +230,7 @@ const DataParser = (() => {
     
     const debug = {
       pageTitle: document.title,
+      characterName: getCharacterName(),
       bodyTextLength: bodyText.length,
       isTrainerPage: isTrainerPage,
       isPokemonPage: isPokemonPage,
@@ -240,6 +258,7 @@ const DataParser = (() => {
     parseSaves,
     parseSkills,
     identifySheetType,
+    getCharacterName,
     getSheetTitle,
     getHitPoints,
     getCompleteSheetData,

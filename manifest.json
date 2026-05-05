@@ -40,6 +40,12 @@
   "action": {
     "default_popup": "popup/popup.html",
     "default_title": "Pokemon 5e Roll20 Integration"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["assets/d20.png"],
+      "matches": ["https://poke5e.app/*", "http://poke5e.app/*"]
+    }
+  ]
 }
 

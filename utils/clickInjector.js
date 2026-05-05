@@ -86,6 +86,7 @@ const ClickInjector = (() => {
           modifier: rollContext.modifier,
           label: `${rollContext.stat} ${rollContext.rollType}`,
           diceFormula: `1d20+${rollContext.modifier}`,
+          characterName: DataParser.getCharacterName(),
           sheetData: DataParser.getCompleteSheetData()
         }
       }, response => {

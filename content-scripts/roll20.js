@@ -6,6 +6,8 @@
 log('Content script loaded on Roll20');
 
 const Roll20Integration = (() => {
+  // Store the characterName of the most recently injected roll
+  let pendingCharacterName = null;
   /**
    * Find the chat input element
    * Tries multiple selectors for different Roll20 versions
@@ -54,17 +56,18 @@ const Roll20Integration = (() => {
    * @returns {string} Dice formula
    */
   function generateDiceFormula(rollData) {
-    const { modifier, stat, rollType, label } = rollData;
+    const { modifier, stat, rollType, label, characterName } = rollData;
 
-    // Basic Roll20 format: /roll 1d20+modifier
-    // Handle positive, zero, and negative modifiers correctly
     const modifierStr = modifier >= 0 ? `+${modifier}` : `${modifier}`;
-    let formula = `1d20${modifierStr}`;
+    const charDisplay = characterName
+      ? (typeof characterName === 'object' ? characterName.character : characterName)
+      : null;
 
-    // Add descriptive label
-    formula += ` [${label || `${stat} ${rollType}`}]`;
+    const rollLabel = charDisplay
+      ? `${charDisplay} | ${label || `${stat} ${rollType}`}`
+      : (label || `${stat} ${rollType}`);
 
-    return formula;
+    return `1d20${modifierStr} [${rollLabel}]`;
   }
 
   /**
@@ -116,6 +119,9 @@ const Roll20Integration = (() => {
 
       log('✓ Roll injected successfully:', command);
       showNotification('✓ Roll injected into Roll20 chat', 'success');
+
+      // Remember character name for styling
+      pendingCharacterName = rollData.characterName || null;
       
       // Mark the roll message with extension styling
       // Try immediately and also with delay in case Roll20 renders async
@@ -348,13 +354,27 @@ const Roll20Integration = (() => {
    * Extract label from formula and inject it into formattedformula
    * @param {HTMLElement} messageEl
    */
-  function formatRollMessage(messageEl) {
+  function formatRollMessage(messageEl, characterName) {
     if (!messageEl || messageEl.dataset.poke5eFormatted) return;
     messageEl.dataset.poke5eFormatted = 'true';
 
     const formulaEl = messageEl.querySelector('.formula');
     const formattedEl = messageEl.querySelector('.formattedformula');
     if (!formulaEl || !formattedEl) return;
+
+    // Inject character name header box if provided
+    const nameData = characterName || (typeof characterName === 'object' ? characterName : null);
+    const charDisplay = nameData
+      ? (nameData.character || null)
+      : null;
+
+    if (charDisplay) {
+      const header = document.createElement('div');
+      header.className = 'poke5e-char-header';
+      header.textContent = charDisplay;
+      messageEl.insertBefore(header, messageEl.firstChild);
+      log(`✓ Injected character header: ${charDisplay}`);
+    }
 
     // Wrap bare text nodes (e.g. "+6") in spans so CSS can target them
     Array.from(formattedEl.childNodes).forEach(node => {
@@ -394,7 +414,8 @@ const Roll20Integration = (() => {
         lastMessage.classList.add('poke5e-roll');
         log('✓ Marked roll with poke5e-roll class');
       }
-      formatRollMessage(lastMessage);
+      formatRollMessage(lastMessage, pendingCharacterName);
+      pendingCharacterName = null;
     } else {
       log('⚠️ No rollresult messages found');
     }
