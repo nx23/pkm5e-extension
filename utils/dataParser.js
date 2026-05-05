@@ -17,25 +17,22 @@ const DataParser = (() => {
    */
   function parseAbilityScores() {
     const abilities = {};
-    const abilityNames = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
-    const bodyText = document.body.innerText;
-    
-    abilityNames.forEach(ability => {
-      // Match ability name followed by score and modifier
-      const abilityRegex = new RegExp(`${ability}\\s+(\\d+)\\s*\\(([+-]?\\d+)\\)`, 'i');
-      const match = bodyText.match(abilityRegex);
-      
-      if (match) {
-        abilities[ability] = {
-          score: parseInt(match[1]),
-          modifier: parseInt(match[2])
-        };
-        log(`✓ Parsed ${ability}: score=${match[1]}, modifier=${match[2]}`);
+    // AttributeBlock.svelte: <dt><abbr title="Strength">STR</abbr></dt><dd>18 (+4)</dd>
+    document.querySelectorAll('dl dt:has(abbr)').forEach(dt => {
+      const abbr = dt.querySelector('abbr');
+      if (!abbr) return;
+      const stat = abbr.innerText.trim().toUpperCase();
+      const dd = dt.nextElementSibling;
+      if (!dd) return;
+      const score = parseInt(dd.innerText);
+      const modMatch = dd.innerText.match(/\(([+-]?\d+)\)/);
+      if (modMatch) {
+        abilities[stat] = { score, modifier: parseInt(modMatch[1]) };
+        log(`✓ Parsed ${stat}: score=${score}, modifier=${modMatch[1]}`);
       } else {
-        log(`✗ Could not parse ${ability}`);
+        log(`✗ Could not parse ${stat}`);
       }
     });
-
     log('Parsed abilities:', abilities);
     return abilities;
   }
@@ -47,33 +44,24 @@ const DataParser = (() => {
    */
   function parseSaves() {
     const saves = {};
-    const abilityNames = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
-    const bodyText = document.body.innerText;
-    
-    // Find the Saves section by looking for "Saves" keyword
-    const savesIndex = bodyText.indexOf('Saves');
-    if (savesIndex === -1) {
+    // SkillsInfo.svelte: <div class="upper"><dl><dt><span>⦿</span><span>STR</span></dt><dd>+7</dd>
+    const saveDts = document.querySelectorAll('div.upper dl dt');
+    if (saveDts.length === 0) {
       log('✗ Could not find Saves section');
       return saves;
     }
-    
-    // Extract text from Saves to Skills
-    const skillsIndex = bodyText.indexOf('Skills');
-    const savesSection = skillsIndex > savesIndex 
-      ? bodyText.substring(savesIndex, skillsIndex)
-      : bodyText.substring(savesIndex);
-    
-    abilityNames.forEach(ability => {
-      // Look for save modifier in format like "STR +5" or "STR +0"
-      const saveRegex = new RegExp(`${ability}\\s+([+-]\\d+)`, 'i');
-      const match = savesSection.match(saveRegex);
-      
-      if (match) {
-        saves[ability] = parseInt(match[1]);
-        log(`✓ Parsed save ${ability}: ${match[1]}`);
+    saveDts.forEach(dt => {
+      const nameSpan = dt.querySelector('span:last-child');
+      if (!nameSpan) return;
+      const stat = nameSpan.innerText.trim().toUpperCase();
+      const dd = dt.nextElementSibling;
+      if (!dd) return;
+      const modifier = parseInt(dd.innerText.trim());
+      if (!isNaN(modifier)) {
+        saves[stat] = modifier;
+        log(`✓ Parsed save ${stat}: ${modifier >= 0 ? '+' : ''}${modifier}`);
       }
     });
-
     log('Parsed saves:', saves);
     return saves;
   }
@@ -85,37 +73,24 @@ const DataParser = (() => {
    */
   function parseSkills() {
     const skills = {};
-    const skillNames = [
-      'Acrobatics', 'Animal Handling', 'Arcana', 'Athletics',
-      'Deception', 'History', 'Insight', 'Intimidation',
-      'Investigation', 'Medicine', 'Nature', 'Perception',
-      'Performance', 'Persuasion', 'Religion', 'Sleight Of Hand',
-      'Stealth', 'Survival'
-    ];
-
-    const bodyText = document.body.innerText;
-    
-    // Find the Skills section
-    const skillsIndex = bodyText.indexOf('Skills');
-    if (skillsIndex === -1) {
+    // SkillsInfo.svelte: <div class="cap"><dl><dt><span>⦿</span><span>Acrobatics</span></dt><dd>+7</dd>
+    const skillDts = document.querySelectorAll('div.cap dl dt');
+    if (skillDts.length === 0) {
       log('✗ Could not find Skills section');
       return skills;
     }
-    
-    // Extract text from Skills onwards
-    const skillsSection = bodyText.substring(skillsIndex);
-
-    skillNames.forEach(skill => {
-      // Look for skill in format like "Athletics +4" or "Sleight Of Hand +1"
-      const skillRegex = new RegExp(`${skill}\\s+([+-]\\d+)`, 'i');
-      const match = skillsSection.match(skillRegex);
-      
-      if (match) {
-        skills[skill] = parseInt(match[1]);
-        log(`✓ Parsed skill ${skill}: ${match[1]}`);
+    skillDts.forEach(dt => {
+      const nameSpan = dt.querySelector('span:last-child');
+      if (!nameSpan) return;
+      const skill = nameSpan.innerText.trim();
+      const dd = dt.nextElementSibling;
+      if (!dd) return;
+      const modifier = parseInt(dd.innerText.trim());
+      if (!isNaN(modifier)) {
+        skills[skill] = modifier;
+        log(`✓ Parsed skill ${skill}: ${modifier >= 0 ? '+' : ''}${modifier}`);
       }
     });
-
     log('Parsed skills:', skills);
     return skills;
   }
@@ -223,31 +198,23 @@ const DataParser = (() => {
    */
   function debugPageStructure() {
     const bodyText = document.body.innerText;
-    
-    // Check for Trainer page indicators
     const isTrainerPage = bodyText.includes('Trainer Id') && bodyText.includes('Species');
-    const isPokemonPage = bodyText.includes('Type') && bodyText.includes('Nature');
-    
+    const hasAbilityScores = document.querySelectorAll('dl dt:has(abbr)').length > 0;
+    const hasSavesSection = document.querySelectorAll('div.upper dl dt').length > 0;
+    const hasSkillsSection = document.querySelectorAll('div.cap dl dt').length > 0;
+    const isPokemonPage = hasAbilityScores;
+
     const debug = {
       pageTitle: document.title,
       characterName: getCharacterName(),
       bodyTextLength: bodyText.length,
-      isTrainerPage: isTrainerPage,
-      isPokemonPage: isPokemonPage,
+      isTrainerPage,
+      isPokemonPage,
       pageType: isTrainerPage ? '🧑 TRAINER' : isPokemonPage ? '🐱 POKEMON' : '❓ UNKNOWN',
-      indicators: {
-        hasTrainerId: bodyText.includes('Trainer Id'),
-        hasSpecies: bodyText.includes('Species'),
-        hasType: bodyText.includes('Type'),
-        hasNature: bodyText.includes('Nature'),
-        hasSavesSection: bodyText.includes('Saves'),
-        hasSkillsSection: bodyText.includes('Skills'),
-        hasAbilityScores: !!bodyText.match(/\b(STR|DEX|CON|INT|WIS|CHA)\s+\d+/)
-      },
+      indicators: { hasAbilityScores, hasSavesSection, hasSkillsSection },
       first1000Chars: bodyText.substring(0, 1000),
-      allText: bodyText
     };
-    
+
     console.log('[DataParser DEBUG]', debug);
     return debug;
   }

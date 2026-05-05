@@ -54,17 +54,19 @@ async function initializeExtension() {
     log(`Initialization attempt ${retries}/${maxRetries}...`);
 
     const debug = DataParser.debugPageStructure();
-    const pageReady = debug.isTrainerPage || debug.isPokemonPage;
+
+    // Page is ready when the ability scores block (dl dt:has(abbr)) or saves/skills are in the DOM
+    const pageReady = debug.indicators.hasAbilityScores ||
+                      debug.indicators.hasSavesSection ||
+                      debug.indicators.hasSkillsSection;
 
     if (!pageReady) {
-      if (retries < maxRetries && debug.bodyTextLength < 500) {
+      if (retries < maxRetries) {
         setTimeout(attemptInitialization, retryDelay);
         return;
       }
-      if (retries >= maxRetries) {
-        log('❌ Excedido número máximo de tentativas');
-        return;
-      }
+      log('❌ Excedido número máximo de tentativas');
+      return;
     }
 
     try {

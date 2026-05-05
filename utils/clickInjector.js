@@ -28,6 +28,13 @@ const ClickInjector = (() => {
     const modifierMatch = text.match(/([+-]\d+)/);
     if (modifierMatch) {
       modifier = parseInt(modifierMatch[1]);
+    } else if (stat && rollType === 'check') {
+      // Ability check: get modifier from parsed ability scores
+      const abilities = DataParser.parseAbilityScores();
+      if (abilities && abilities[stat] !== undefined) {
+        modifier = abilities[stat].modifier;
+        log(`✓ Got ${stat} check modifier from parser: ${modifier}`);
+      }
     } else if (stat && rollType === 'save') {
       // If no modifier found in text, try to get from parsed saves
       const saves = DataParser.parseSaves();
@@ -84,7 +91,9 @@ const ClickInjector = (() => {
           rollType: rollContext.rollType,
           stat: rollContext.stat,
           modifier: rollContext.modifier,
-          label: `${rollContext.stat} ${rollContext.rollType}`,
+          label: rollContext.rollType === 'skill'
+            ? rollContext.stat
+            : `${rollContext.stat} ${rollContext.rollType}`,
           diceFormula: `1d20+${rollContext.modifier}`,
           characterName: DataParser.getCharacterName(),
           sheetData: DataParser.getCompleteSheetData()
@@ -167,102 +176,90 @@ const ClickInjector = (() => {
   }
 
   /**
-   * Find and inject saves section clicks
-   * More robust approach: Find elements containing save patterns
+   * Find and inject ability score clicks (Stats section).
+   * Source: AttributeBlock.svelte → <dl><dt><abbr title="Strength">STR</abbr></dt><dd>18 (+4)</dd>
+   * Selector: dl dt:has(abbr)
+   */
+  function injectAbilityHandlers() {
+    let injected = 0;
+    document.querySelectorAll('dl dt:has(abbr)').forEach(dt => {
+      if (dt.classList.contains(ROLLABLE_CLASS)) return;
+      const abbr = dt.querySelector('abbr');
+      if (!abbr) return;
+      const stat = abbr.innerText.trim().toUpperCase();
+      const dd = dt.nextElementSibling;
+      if (!dd) return;
+      const modMatch = dd.innerText.match(/\(([+-]?\d+)\)/);
+      if (!modMatch) return;
+      const modifier = parseInt(modMatch[1]);
+
+      dt.classList.add(ROLLABLE_CLASS);
+      addHoverEffect(dt);
+      dt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sendRollRequest({ rollType: 'check', stat, modifier });
+      });
+      injected++;
+      log(`✓ Ability check handler injected: ${stat} (${modifier >= 0 ? '+' : ''}${modifier})`);
+    });
+    log(`Injected ${injected} ability check handlers`);
+  }
+
+  /**
+   * Find and inject saves section clicks.
+   * Source: SkillsInfo.svelte → <div class="upper"><dl><dt><span>⦿</span><span>STR</span></dt><dd>+7</dd>
+   * Selector: div.upper dl dt
    */
   function injectSavesHandlers() {
-    const abilityNames = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
     let injected = 0;
+    document.querySelectorAll('div.upper dl dt').forEach(dt => {
+      if (dt.classList.contains(ROLLABLE_CLASS)) return;
+      const nameSpan = dt.querySelector('span:last-child');
+      if (!nameSpan) return;
+      const stat = nameSpan.innerText.trim().toUpperCase();
+      const dd = dt.nextElementSibling;
+      if (!dd) return;
+      const modifier = parseInt(dd.innerText.trim());
+      if (isNaN(modifier)) return;
 
-    // Find all elements that might contain ability saves
-    const allElements = document.querySelectorAll('*');
-    const processedElements = new Set();
-
-    allElements.forEach(el => {
-      // Skip if already processed
-      if (processedElements.has(el)) return;
-      if (el.classList.contains(ROLLABLE_CLASS)) return;
-      if (el.children.length > 0) return; // Skip containers, look for leaf elements
-
-      const text = el.innerText?.trim() || '';
-      
-      // Look for patterns like "STR +5" or just "STR" in save sections
-      abilityNames.forEach(ability => {
-        const saveRegex = new RegExp(`^${ability}\\s*[+-]?\\d*$`);
-        
-        if (saveRegex.test(text) || (text.includes(ability) && text.match(/[+-]\d+/))) {
-          // Found a save element!
-          el.classList.add(ROLLABLE_CLASS);
-          addHoverEffect(el);
-          processedElements.add(el);
-          
-          el.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const context = createRollContext(el, 'save');
-            if (context.stat) {
-              sendRollRequest(context);
-            }
-          });
-          
-          injected++;
-          log(`✓ Save handler injected: ${text}`);
-        }
+      dt.classList.add(ROLLABLE_CLASS);
+      addHoverEffect(dt);
+      dt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sendRollRequest({ rollType: 'save', stat, modifier });
       });
+      injected++;
+      log(`✓ Save handler injected: ${stat} (${modifier >= 0 ? '+' : ''}${modifier})`);
     });
-
     log(`Injected ${injected} save handlers`);
   }
 
   /**
-   * Find and inject skills section clicks
-   * More robust approach: Find elements containing skill patterns
+   * Find and inject skills section clicks.
+   * Source: SkillsInfo.svelte → <div class="cap"><dl><dt><span>⦿</span><span>Acrobatics</span></dt><dd>+7</dd>
+   * Selector: div.cap dl dt
    */
   function injectSkillsHandlers() {
-    const skillNames = [
-      'Acrobatics', 'Animal Handling', 'Arcana', 'Athletics',
-      'Deception', 'History', 'Insight', 'Intimidation',
-      'Investigation', 'Medicine', 'Nature', 'Perception',
-      'Performance', 'Persuasion', 'Religion', 'Sleight Of Hand',
-      'Stealth', 'Survival'
-    ];
-
     let injected = 0;
-    const processedElements = new Set();
+    document.querySelectorAll('div.cap dl dt').forEach(dt => {
+      if (dt.classList.contains(ROLLABLE_CLASS)) return;
+      const nameSpan = dt.querySelector('span:last-child');
+      if (!nameSpan) return;
+      const skill = nameSpan.innerText.trim();
+      const dd = dt.nextElementSibling;
+      if (!dd) return;
+      const modifier = parseInt(dd.innerText.trim());
+      if (isNaN(modifier)) return;
 
-    // Find all elements that might contain skill bonuses
-    const allElements = document.querySelectorAll('*');
-
-    allElements.forEach(el => {
-      // Skip if already processed
-      if (processedElements.has(el)) return;
-      if (el.classList.contains(ROLLABLE_CLASS)) return;
-      if (el.children.length > 0) return; // Skip containers
-
-      const text = el.innerText?.trim() || '';
-
-      skillNames.forEach(skill => {
-        // Match skill name with optional bonus: "Athletics +4" or "Sleight Of Hand +1"
-        const skillRegex = new RegExp(`^${skill}\\s*[+-]?\\d*$`, 'i');
-        
-        if (skillRegex.test(text) || (text.includes(skill) && text.match(/[+-]\d+/))) {
-          // Found a skill element!
-          el.classList.add(ROLLABLE_CLASS);
-          addHoverEffect(el);
-          processedElements.add(el);
-          
-          el.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const context = createRollContext(el, 'skill');
-            context.skill = skill;
-            sendRollRequest(context);
-          });
-          
-          injected++;
-          log(`✓ Skill handler injected: ${text}`);
-        }
+      dt.classList.add(ROLLABLE_CLASS);
+      addHoverEffect(dt);
+      dt.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sendRollRequest({ rollType: 'skill', stat: skill, modifier });
       });
+      injected++;
+      log(`✓ Skill handler injected: ${skill} (${modifier >= 0 ? '+' : ''}${modifier})`);
     });
-
     log(`Injected ${injected} skill handlers`);
   }
 
@@ -273,6 +270,7 @@ const ClickInjector = (() => {
     log('Injecting click handlers...');
     
     try {
+      injectAbilityHandlers();
       injectSavesHandlers();
       injectSkillsHandlers();
       log('✓ Click handlers injected successfully');
