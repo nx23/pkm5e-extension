@@ -44,16 +44,23 @@
   position: relative;
 }
 
-.poke5e-hover::after {
-  content: '🎲';
+.poke5e-hover::before {
+  content: '';
   position: absolute;
-  right: -20px;
+  left: -22px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
   opacity: 0;
-  transition: opacity 0.2s ease;
-  font-size: 14px;
+
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  /* background-image set by JS via chrome.runtime.getURL */
 }
 
-.poke5e-hover:hover::after {
+.poke5e-hover:hover::before {
   opacity: 1;
 }
 

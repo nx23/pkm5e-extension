@@ -4,6 +4,15 @@
  */
 
 log('Content script loaded on poke5e.app');
+
+// Inject dice icon URL into CSS for .poke5e-hover::after
+(function injectDiceIconStyle() {
+  const iconUrl = chrome.runtime.getURL('assets/d20.png');
+  const style = document.createElement('style');
+  style.textContent = `.poke5e-hover::before { background-image: url("${iconUrl}"); }`;
+  document.head.appendChild(style);
+})();
+
 log('Available modules:', {
   hasDataParser: typeof DataParser !== 'undefined',
   hasClickInjector: typeof ClickInjector !== 'undefined',
