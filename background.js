@@ -111,14 +111,32 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse(response);
       } catch (error) {
         log('Error in roll request handler:', error);
-        sendResponse({
-          success: false,
-          error: error.message
-        });
+        sendResponse({ success: false, error: error.message });
       }
     })();
-    
-    // Return true to indicate we'll send response asynchronously
+    return true;
+  }
+
+  // Handle attack requests (hit roll + damage roll) from poke5e.app
+  if (request.type === 'ATTACK_REQUEST') {
+    log('Processing attack request:', request);
+    (async () => {
+      try {
+        const roll20Tab = await findRoll20Tab();
+        if (!roll20Tab) {
+          sendResponse({ success: false, error: 'No active Roll20 tab found.' });
+          return;
+        }
+        const response = await chrome.tabs.sendMessage(roll20Tab.id, {
+          type: 'EXECUTE_ATTACK',
+          data: request.data
+        });
+        sendResponse(response || { success: true });
+      } catch (error) {
+        log('Error in attack request handler:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
     return true;
   }
 

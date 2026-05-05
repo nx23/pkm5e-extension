@@ -187,24 +187,67 @@ const Roll20Integration = (() => {
         log('Processing EXECUTE_ROLL request...');
         try {
           const success = injectRollIntoChat(request.data);
-          
           const response = {
             success: success,
             message: success ? '✓ Roll injected' : '✗ Failed to inject roll',
             data: request.data
           };
-          
           log('Sending response:', response);
           sendResponse(response);
         } catch (error) {
           log('❌ Error processing roll:', error.message);
-          sendResponse({
-            success: false,
-            message: `Error: ${error.message}`,
-            data: request.data
-          });
+          sendResponse({ success: false, message: `Error: ${error.message}`, data: request.data });
         }
+        return true;
+      }
 
+      if (request.type === 'EXECUTE_ATTACK') {
+        log('Processing EXECUTE_ATTACK request...');
+        try {
+          const { moveName, characterName, toHit, damageDice } = request.data;
+          const charDisplay = characterName
+            ? (typeof characterName === 'object' ? characterName.character : characterName)
+            : null;
+          const prefix = charDisplay ? `${charDisplay} | ` : '';
+
+          let success = true;
+
+          // Roll 1: attack hit roll
+          if (toHit !== null && toHit !== undefined) {
+            const hitMod = toHit >= 0 ? `+${toHit}` : `${toHit}`;
+            success = injectRollIntoChat({
+              stat: moveName,
+              rollType: 'attack',
+              modifier: toHit,
+              label: `${prefix}${moveName} | Attack`,
+              characterName: null, // already embedded in label
+            });
+          }
+
+          // Roll 2: damage roll (sent after a short delay so they appear in order)
+          if (damageDice) {
+            setTimeout(() => {
+              const chatInput = findChatInput();
+              if (!chatInput) return;
+              const damageLabel = `${prefix}${moveName} | Damage`;
+              const command = `/roll ${damageDice} [${damageLabel}]`;
+              chatInput.value = command;
+              chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+              chatInput.dispatchEvent(new Event('change', { bubbles: true }));
+              const sendButton = document.querySelector('#chatSendBtn');
+              if (sendButton) sendButton.click();
+              // Mark the damage roll for styling
+              setTimeout(() => Roll20Integration.markExtensionRoll(), 50);
+              setTimeout(() => Roll20Integration.markExtensionRoll(), 200);
+              log('✓ Damage roll injected:', command);
+            }, 400);
+          }
+
+          sendResponse({ success });
+        } catch (error) {
+          log('❌ Error processing attack:', error.message);
+          sendResponse({ success: false, message: `Error: ${error.message}` });
+        }
         return true;
       }
 
@@ -325,10 +368,19 @@ const Roll20Integration = (() => {
               if (messageEl && messageEl.classList.contains('rollresult')) {
                 const formula = messageEl.querySelector('.formula');
                 const formulaText = formula ? formula.textContent : '';
-                const poke5eKeywords = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA',
-                  'Athletics', 'Perception', 'Acrobatics', 'Stealth', 'save', 'skill'];
+                // Detect any roll from this extension by looking for the " | " separator
+                // pattern used in all our labels: "CharName | Label" or "Label"
+                const isPoke5eRoll = formulaText.includes(' | ') || [
+                  'STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA',
+                  'check', 'save', 'skill', 'Attack', 'Damage',
+                  'Acrobatics', 'Animal Handling', 'Arcana', 'Athletics',
+                  'Deception', 'History', 'Insight', 'Intimidation',
+                  'Investigation', 'Medicine', 'Nature', 'Perception',
+                  'Performance', 'Persuasion', 'Religion', 'Sleight Of Hand',
+                  'Stealth', 'Survival'
+                ].some(kw => formulaText.includes(kw));
 
-                if (poke5eKeywords.some(kw => formulaText.includes(kw))) {
+                if (isPoke5eRoll) {
                   messageEl.classList.add('poke5e-roll');
                   formatRollMessage(messageEl);
                   log('✓ Styled new roll message');

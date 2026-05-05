@@ -264,6 +264,90 @@ const ClickInjector = (() => {
   }
 
   /**
+   * Find and inject attack handlers on move names.
+   * Source: MoveDetails.svelte + MoveStatsInfo.svelte
+   * Structure:
+   *   <div class="hrow ..."><span class="flex-span bold"><a href="...">Quick Attack</a></span></div>
+   *   <dl class="move-stats-info">
+   *     <div><dt>Attack</dt><dd>+7 to Hit</dd></div>
+   *     <div><dt>Damage</dt><dd>1d6</dd></div>
+   *   </dl>
+   */
+  function injectAttackHandlers() {
+    let injected = 0;
+
+    // Each move block has a .move-stats-info dl with Attack and/or Damage divs
+    document.querySelectorAll('dl.move-stats-info').forEach(statsDl => {
+      // Find the to-hit value: div containing <dt>Attack</dt>
+      let toHit = null;
+      let damageDice = null;
+
+      statsDl.querySelectorAll('div').forEach(div => {
+        const dt = div.querySelector('dt');
+        const dd = div.querySelector('dd');
+        if (!dt || !dd) return;
+        const label = dt.innerText.trim().toLowerCase();
+        if (label === 'attack') {
+          // "+7 to Hit" → extract the number
+          const match = dd.innerText.match(/([+-]?\d+)/);
+          if (match) toHit = parseInt(match[1]);
+        } else if (label === 'damage' || label === 'healing') {
+          // "1d6" or "2d6 + 3"
+          damageDice = dd.innerText.trim().replace(/\s+/g, '');
+        }
+      });
+
+      // No attack stat = move without a hit roll (e.g. pure save moves), skip
+      if (toHit === null && damageDice === null) return;
+
+      // Find the move name link — it's in the .hrow above this dl
+      // The dl is a sibling of .move-stats (its parent div), which is inside .vstack
+      const moveContainer = statsDl.closest('.vstack');
+      if (!moveContainer) return;
+      const nameLink = moveContainer.querySelector('.flex-span.bold a, .flex-span a');
+      if (!nameLink) return;
+      if (nameLink.classList.contains(ROLLABLE_CLASS)) return;
+
+      const moveName = nameLink.innerText.trim();
+
+      nameLink.classList.add(ROLLABLE_CLASS);
+      addHoverEffect(nameLink);
+
+      nameLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const characterName = DataParser.getCharacterName();
+        chrome.runtime.sendMessage({
+          type: 'ATTACK_REQUEST',
+          data: {
+            moveName,
+            characterName,
+            toHit,
+            damageDice,
+          }
+        }, response => {
+          if (chrome.runtime.lastError) {
+            log('❌ Chrome error:', chrome.runtime.lastError.message);
+            showNotification(`✗ ${chrome.runtime.lastError.message}`, 'error');
+            return;
+          }
+          if (response && response.success) {
+            showNotification(`⚔ ${moveName} rolled!`, 'success');
+          } else {
+            showNotification(`✗ ${response?.error || 'Unknown error'}`, 'error');
+          }
+        });
+      });
+
+      injected++;
+      log(`✓ Attack handler injected: ${moveName} (toHit=${toHit}, damage=${damageDice})`);
+    });
+
+    log(`Injected ${injected} attack handlers`);
+  }
+
+  /**
    * Main injection function - call this to set up all handlers
    */
   function injectAllHandlers() {
@@ -273,6 +357,7 @@ const ClickInjector = (() => {
       injectAbilityHandlers();
       injectSavesHandlers();
       injectSkillsHandlers();
+      injectAttackHandlers();
       log('✓ Click handlers injected successfully');
       showNotification('Pokemon 5e Roll20 Extension Active', 'info');
     } catch (error) {
