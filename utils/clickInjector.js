@@ -292,8 +292,10 @@ const ClickInjector = (() => {
           const match = dd.innerText.match(/([+-]?\d+)/);
           if (match) toHit = parseInt(match[1]);
         } else if (label === 'damage' || label === 'healing') {
-          // "1d6" or "2d6 + 3"
-          damageDice = dd.innerText.trim().replace(/\s+/g, '');
+          // "1d6" or "2d6 + 3", strip any non-dice characters (e.g. STAB alert icon)
+          damageDice = dd.innerText.trim()
+            .replace(/\s+/g, '')
+            .replace(/[^0-9d+\-*\/().]/gi, '');
         }
       });
 

@@ -229,7 +229,7 @@ const Roll20Integration = (() => {
             setTimeout(() => {
               const chatInput = findChatInput();
               if (!chatInput) return;
-              const damageLabel = `${prefix}${moveName} | Damage`;
+              const damageLabel = `${prefix}${moveName} | Damage (${damageDice})`;
               const command = `/roll ${damageDice} [${damageLabel}]`;
               chatInput.value = command;
               chatInput.dispatchEvent(new Event('input', { bubbles: true }));
