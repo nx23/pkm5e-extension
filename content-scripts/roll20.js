@@ -224,130 +224,66 @@ const Roll20Integration = (() => {
     style.setAttribute('data-poke5e-styles', 'true');
     style.textContent = `
       /* Pokemon 5e Roll20 Extension Styles */
-      
-      /* General message styling for extension rolls */
+
+      /* Container: subtle tint + left accent border */
       div.message.poke5e-roll {
-        background: linear-gradient(135deg, rgba(66, 135, 245, 0.15) 0%, rgba(102, 51, 153, 0.15) 100%) !important;
-        border-left: 4px solid #4287f5 !important;
-        border-radius: 6px !important;
-        transition: all 0.3s ease !important;
-      }
-      
-      div.message.poke5e-roll:hover {
-        background: linear-gradient(135deg, rgba(66, 135, 245, 0.25) 0%, rgba(102, 51, 153, 0.25) 100%) !important;
-        border-left-color: #6633ff !important;
-        box-shadow: 0 4px 12px rgba(66, 135, 245, 0.3) !important;
-      }
-      
-      /* Formula styling - the text formula */
-      div.message.poke5e-roll div.formula {
-        font-weight: 700 !important;
-        font-size: 1.15em !important;
-        color: #2952cc !important;
-        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
-        padding: 10px 0 !important;
-      }
-      
-      /* Formatted formula (the actual dice result) */
-      div.message.poke5e-roll div.formattedformula {
-        background: linear-gradient(135deg, rgba(66, 135, 245, 0.08) 0%, rgba(102, 51, 153, 0.08) 100%) !important;
-        padding: 12px 14px !important;
-        border-radius: 6px !important;
-        font-weight: 700 !important;
-        font-size: 1.05em !important;
-        color: #2c2c2c !important;
-        margin: 10px 0 !important;
+        background: rgba(66, 135, 245, 0.04) !important;
         border-left: 3px solid #4287f5 !important;
+        border-radius: 3px !important;
       }
-      
-      /* Dice roll container */
-      div.message.poke5e-roll div.dicegrouping {
-        background: linear-gradient(135deg, #fff9e6 0%, #ffe6cc 100%) !important;
-        padding: 10px !important;
-        border-radius: 6px !important;
-        border: 3px solid #ffd700 !important;
-        display: inline-block !important;
-        font-weight: bold !important;
-        margin: 0 6px !important;
-        box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3) !important;
-      }
-      
-      /* Individual dice */
-      div.message.poke5e-roll div.diceroll {
-        background: linear-gradient(135deg, #fff 0%, #f9f9f9 100%) !important;
-        border: 2px solid #d0d0d0 !important;
-        border-radius: 5px !important;
-        padding: 8px 12px !important;
-        font-weight: bold !important;
-        color: #333 !important;
-        margin: 0 3px !important;
-        transition: all 0.2s ease !important;
-        display: inline-flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        min-width: 32px !important;
-      }
-      
-      /* Critical success styling */
-      div.message.poke5e-roll div.diceroll.critsuccess {
-        background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%) !important;
-        border-color: #2e7d32 !important;
-        color: white !important;
-        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4) !important;
-        box-shadow: 0 4px 10px rgba(76, 175, 80, 0.5) !important;
-        transform: scale(1.15) !important;
-      }
-      
-      /* Critical fail styling */
-      div.message.poke5e-roll div.diceroll.critfail {
-        background: linear-gradient(135deg, #f44336 0%, #da190b 100%) !important;
-        border-color: #b71c1c !important;
-        color: white !important;
-        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4) !important;
-        box-shadow: 0 4px 10px rgba(244, 67, 54, 0.5) !important;
-        transform: scale(1.15) !important;
-      }
-      
-      /* Result number styling */
-      div.message.poke5e-roll div.rolled {
-        background: linear-gradient(135deg, #6633ff 0%, #4287f5 100%) !important;
-        color: white !important;
-        font-weight: 900 !important;
-        font-size: 1.4em !important;
-        padding: 10px 16px !important;
-        border-radius: 8px !important;
-        box-shadow: 0 6px 16px rgba(102, 51, 255, 0.4) !important;
-        text-shadow: 0 3px 6px rgba(0, 0, 0, 0.4) !important;
-        border: 2px solid rgba(255, 255, 255, 0.3) !important;
-        display: inline-block !important;
-        min-width: 48px !important;
-        text-align: center !important;
-        margin: 0 6px !important;
-      }
-      
-      /* Equal sign */
-      div.message.poke5e-roll strong {
-        color: #4287f5 !important;
-        font-size: 1.2em !important;
-        margin: 0 6px !important;
-        font-weight: 900 !important;
-      }
-      
-      /* Timestamp styling */
-      div.message.poke5e-roll span.tstamp {
-        color: #6633ff !important;
+
+      /* Player name */
+      div.message.poke5e-roll span.by {
         font-weight: 700 !important;
       }
-      
-      /* Player name styling */
-      div.message.poke5e-roll span.by {
-        color: #4287f5 !important;
-        font-weight: 800 !important;
+
+      /* Always hide "rolling 1d20+4 [label]" text */
+      div.message.poke5e-roll div.formula {
+        display: none !important;
       }
+      #textchat > div.content strong {
+        display: none !important;
+      }
+
+      /* DEFAULT: total as full-width centered gray box */
+      div.message.poke5e-roll div.rolled {
+        display: block !important;
+        text-align: center !important;
+        background: #e8e8e8 !important;
+        border: 1px solid #c8c8c8 !important;
+        border-radius: 3px !important;
+        padding: 5px 0 !important;
+        font-size: 1.2em !important;
+        font-weight: 700 !important;
+        color: #333 !important;
+        margin: 3px 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      div.message.poke5e-roll div.formattedformula {
+        display: flex !important;
+        align-items: center !important;
+        text-align: center !important;
+        justify-content: center !important;
+        flex-wrap: wrap !important;
+        gap: 4px !important;
+        background: #f5f5f5 !important;
+        border: 1px solid #ddd !important;
+        border-radius: 3px !important;
+        padding: 4px 10px !important;
+        margin: 2px 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+
+      /* Crit success/fail colors on dice */
+      div.message.poke5e-roll div.diceroll.critsuccess { color: #2e7d32 !important; font-weight: 900 !important; }
+      div.message.poke5e-roll div.diceroll.critfail    { color: #b71c1c !important; font-weight: 900 !important; }
     `;
     
     document.head.appendChild(style);
-    log('✓ Custom styles injected with !important flags');
+    log('✓ Compact styles injected');
   }
 
   /**
@@ -381,20 +317,14 @@ const Roll20Integration = (() => {
               
               // Check if this is a rollresult message
               if (messageEl && messageEl.classList.contains('rollresult')) {
-                // Check if it contains Pokemon 5e indicators
                 const formula = messageEl.querySelector('.formula');
-                if (formula && formula.textContent.includes('STR') || 
-                    formula.textContent.includes('DEX') ||
-                    formula.textContent.includes('CON') ||
-                    formula.textContent.includes('INT') ||
-                    formula.textContent.includes('WIS') ||
-                    formula.textContent.includes('CHA') ||
-                    formula.textContent.includes('Athletics') ||
-                    formula.textContent.includes('Perception') ||
-                    formula.textContent.includes('save') ||
-                    formula.textContent.includes('roll')) {
-                  
+                const formulaText = formula ? formula.textContent : '';
+                const poke5eKeywords = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA',
+                  'Athletics', 'Perception', 'Acrobatics', 'Stealth', 'save', 'skill'];
+
+                if (poke5eKeywords.some(kw => formulaText.includes(kw))) {
                   messageEl.classList.add('poke5e-roll');
+                  formatRollMessage(messageEl);
                   log('✓ Styled new roll message');
                 }
               }
@@ -415,6 +345,40 @@ const Roll20Integration = (() => {
   }
 
   /**
+   * Extract label from formula and inject it into formattedformula
+   * @param {HTMLElement} messageEl
+   */
+  function formatRollMessage(messageEl) {
+    if (!messageEl || messageEl.dataset.poke5eFormatted) return;
+    messageEl.dataset.poke5eFormatted = 'true';
+
+    const formulaEl = messageEl.querySelector('.formula');
+    const formattedEl = messageEl.querySelector('.formattedformula');
+    if (!formulaEl || !formattedEl) return;
+
+    // Wrap bare text nodes (e.g. "+6") in spans so CSS can target them
+    Array.from(formattedEl.childNodes).forEach(node => {
+      if (node.nodeType === 3 && node.textContent.trim()) {
+        const span = document.createElement('span');
+        span.className = 'poke5e-modifier-text';
+        span.textContent = node.textContent;
+        formattedEl.replaceChild(span, node);
+      }
+    });
+
+    // Inject label [WIS save] at the start of the breakdown row
+    const labelMatch = formulaEl.textContent.match(/\[([^\]]+)\]/);
+    if (labelMatch) {
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'poke5e-label';
+      labelSpan.textContent = labelMatch[1];
+      formattedEl.insertBefore(labelSpan, formattedEl.firstChild);
+    }
+
+    log('✓ Formatted roll message');
+  }
+
+  /**
    * Mark a roll message as coming from the extension
    * Call this when you inject a roll to add the poke5e-roll class
    */
@@ -426,13 +390,11 @@ const Roll20Integration = (() => {
     if (messages.length > 0) {
       const lastMessage = messages[messages.length - 1];
       
-      // Check if it already has the class
       if (!lastMessage.classList.contains('poke5e-roll')) {
         lastMessage.classList.add('poke5e-roll');
         log('✓ Marked roll with poke5e-roll class');
-      } else {
-        log('Roll already marked');
       }
+      formatRollMessage(lastMessage);
     } else {
       log('⚠️ No rollresult messages found');
     }
