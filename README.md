@@ -137,63 +137,10 @@ Once published, you'll be able to install directly from the Chrome Web Store.
 **Handlers disappear when I switch Pokémon**
 - This was fixed in v1.1 — update your extension
 - The extension now auto-reinjects handlers every 500ms on URL changes (SPA navigation)
-- Manual fix: Open Developer Console (F12) and run `window.__poke5eExtension.reinject()`
 
 **Damage dice shows weird characters (e.g., "2d8+7ⓘ")**
 - This was fixed in v1.1 — update your extension
 - The extension now strips STAB alert icons automatically
-
-## Debugging
-
-### Console Commands (poke5e.app)
-
-Open the JavaScript console (F12) and use:
-
-```javascript
-// Check extension and page status
-window.__poke5eExtension.status()
-
-// Get parsed sheet data (abilities, saves, skills)
-window.__poke5eExtension.getData()
-
-// View page structure detection
-window.__poke5eExtension.debugPageStructure()
-
-// Manually reinject handlers (useful after DOM changes)
-window.__poke5eExtension.reinject()
-
-// Check Roll20 connection
-window.__poke5eExtension.checkStatus()
-
-// View logs
-window.__poke5eExtension.log('Your message')
-
-// Control SPA navigation detection
-window.__poke5eExtension.startObserver()   // Manual start
-window.__poke5eExtension.stopObserver()    // Manual stop
-```
-
-### Console Commands (Roll20)
-
-```javascript
-// Test a manual roll injection
-window.__poke5eRoll20.injectRollIntoChat({
-  stat: 'STR',
-  rollType: 'check',
-  modifier: 4,
-  label: 'STR check',
-  characterName: null
-})
-
-// Manually mark last roll for styling
-window.__poke5eRoll20.markExtensionRoll()
-
-// Find the chat input element
-window.__poke5eRoll20.findChatInput()
-
-// Check integration status
-window.__poke5eRoll20
-```
 
 ### Checking Logs
 
@@ -238,19 +185,6 @@ pkm5e-extension/
     ├── icon-48.png           # Icon 48x48
     └── icon-128.png          # Icon 128x128 (add these)
 ```
-
-## Development Guide
-
-### Making Your First Modification
-
-See [PROJECT_PLAN.md](PROJECT_PLAN.md) for detailed implementation guidance.
-
-**Quick example - Adding a new rollable element type:**
-
-1. **Identify the element** on poke5e.app (inspect with F12)
-2. **Update dataParser.js** to extract the data
-3. **Update clickInjector.js** to add click handlers
-4. **Test** by refreshing and using the console
 
 ### Architecture Overview
 
@@ -365,7 +299,6 @@ The extension uses **URL polling** to detect SPA navigation:
 - Automatically re-injects all handlers on new page
 
 This approach works reliably because content scripts run in an isolated world and can't intercept `history.pushState` calls.
-```
 
 ## Configuration
 
@@ -453,13 +386,6 @@ Roll20Integration.showNotification(msg, type) // Display Roll20 notification
 - Shows dice emoji and highlight effect
 - Background image: `assets/d20.png`
 
-## Known Issues
-
-- [ ] Some custom CSS on poke5e.app may interfere with click detection
-- [ ] Roll20 chat input selector may vary between Roll20 versions
-- [ ] Extension doesn't auto-send rolls (you must press Enter)
-- [ ] Attack damage rolls may take 400-500ms to appear after hit roll
-
 ## Contributing
 
 Contributions welcome! Please:
@@ -475,8 +401,6 @@ Contributions welcome! Please:
 ## License
 
 This extension is released under the **MIT License**, which allows you to freely use, modify, and distribute the code with proper attribution.
-
-See the [LICENSE](LICENSE) file for full legal text.
 
 ## Support & Feedback
 
