@@ -1,5 +1,7 @@
 # Pokemon 5e Roll20 Extension
 
+### Install using [Chrome WebStore - Poke5eRoll20](https://chromewebstore.google.com/detail/alellhfnhemmnlbdaaafegkgohkiioik?utm_source=item-share-cb)
+
 A Chrome Extension that seamlessly integrates [Pokemon 5e](https://poke5e.app/) character sheets with [Roll20](https://roll20.net/), enabling **one-click dice rolling directly from your character abilities, saves, skills, and attacks**.
 
 **No more copy-pasting formulas!** Click an ability save, attack, or skill on your Pokemon 5e sheet and watch the dice formula instantly appear in Roll20 chat.
@@ -54,7 +56,7 @@ A Chrome Extension that seamlessly integrates [Pokemon 5e](https://poke5e.app/) 
 
 ### From Chrome Web Store (Coming Soon)
 
-Once published, you'll be able to install directly from the Chrome Web Store.
+[Chrome WebStore - Poke5eRoll20](https://chromewebstore.google.com/detail/alellhfnhemmnlbdaaafegkgohkiioik?utm_source=item-share-cb)
 
 ## Quick Start
 
