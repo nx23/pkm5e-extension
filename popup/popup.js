@@ -9,11 +9,7 @@ log('Initialized');
 const extensionStatusEl = document.getElementById('extension-status');
 const roll20StatusEl = document.getElementById('roll20-status');
 const enableExtensionCheckbox = document.getElementById('enable-extension');
-const soundEnabledCheckbox = document.getElementById('sound-enabled');
-const notificationStyleSelect = document.getElementById('notification-style');
 const testConnectionBtn = document.getElementById('test-connection');
-const viewHistoryBtn = document.getElementById('view-history');
-const resetSettingsBtn = document.getElementById('reset-settings');
 const reportBugLink = document.getElementById('report-bug');
 const viewSourceLink = document.getElementById('view-source');
 
@@ -77,8 +73,6 @@ async function loadSettings() {
   const settings = await StorageManager.getAllSettings();
 
   enableExtensionCheckbox.checked = settings.extensionEnabled;
-  soundEnabledCheckbox.checked = settings.soundEnabled;
-  notificationStyleSelect.value = settings.notificationStyle;
 }
 
 /**
@@ -86,8 +80,6 @@ async function loadSettings() {
  */
 async function saveSettings() {
   await StorageManager.setSetting('extensionEnabled', enableExtensionCheckbox.checked);
-  await StorageManager.setSetting('soundEnabled', soundEnabledCheckbox.checked);
-  await StorageManager.setSetting('notificationStyle', notificationStyleSelect.value);
 
   showFeedback('Settings saved!');
 }
@@ -213,12 +205,8 @@ async function resetAllSettings() {
  * Event listeners
  */
 enableExtensionCheckbox.addEventListener('change', saveSettings);
-soundEnabledCheckbox.addEventListener('change', saveSettings);
-notificationStyleSelect.addEventListener('change', saveSettings);
 
 testConnectionBtn.addEventListener('click', testConnection);
-viewHistoryBtn.addEventListener('click', viewRollHistory);
-resetSettingsBtn.addEventListener('click', resetAllSettings);
 
 reportBugLink.addEventListener('click', (e) => {
   e.preventDefault();
