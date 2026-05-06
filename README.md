@@ -112,13 +112,6 @@ Once published, you'll be able to install directly from the Chrome Web Store.
    - **Damage Roll**: `1d6 [CharName | Quick Attack | Damage (1d6)]` (400ms delay)
 4. Both rolls are automatically formatted with extension styling
 
-### Using the Popup UI
-
-- **Test Connection**: Verify that a Roll20 tab is open
-- **Settings**: Configure notifications, enable/disable features
-- **View History**: See your recent rolls
-- **Reset Settings**: Revert to default configuration
-
 ## Troubleshooting
 
 ### Common Issues

@@ -111,59 +111,6 @@ function showFeedback(message) {
 }
 
 /**
- * Test connection between poke5e and Roll20
- */
-async function testConnection() {
-  testConnectionBtn.textContent = 'Testing...';
-  testConnectionBtn.disabled = true;
-
-  try {
-    log('Starting connection test...');
-    
-    // Send test message to background
-    const response = await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Background worker not responding'));
-      }, 5000);
-      
-      chrome.runtime.sendMessage(
-        { type: 'CHECK_STATUS' },
-        (response) => {
-          clearTimeout(timeout);
-          if (chrome.runtime.lastError) {
-            reject(chrome.runtime.lastError);
-          } else {
-            resolve(response);
-          }
-        }
-      );
-    });
-
-    log('Connection test response:', response);
-
-    if (response || response.roll20Found) {
-      showFeedback('✓ Connection successful! Roll20 detected.');
-      testConnectionBtn.textContent = 'Connection OK';
-      testConnectionBtn.style.background = '#4CAF50';
-      testConnectionBtn.style.color = 'white';
-    } else {
-      showFeedback('✗ No Roll20 tab found. Please open Roll20 first.');
-      log('Roll20 not found. Make sure Roll20 is open.');
-    }
-  } catch (error) {
-    log('Connection test failed:', error);
-    showFeedback(`✗ Connection failed: ${error.message}`);
-  } finally {
-    setTimeout(() => {
-      testConnectionBtn.textContent = 'Test Connection';
-      testConnectionBtn.disabled = false;
-      testConnectionBtn.style.background = '';
-      testConnectionBtn.style.color = '';
-    }, 2000);
-  }
-}
-
-/**
  * View roll history
  */
 async function viewRollHistory() {
