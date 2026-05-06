@@ -158,14 +158,14 @@ testConnectionBtn.addEventListener('click', testConnection);
 reportBugLink.addEventListener('click', (e) => {
   e.preventDefault();
   chrome.tabs.create({
-    url: 'https://github.com/yourusername/pkm5e-extension/issues'
+    url: 'https://github.com/nx23/pkm5e-extension/issues'
   });
 });
 
 viewSourceLink.addEventListener('click', (e) => {
   e.preventDefault();
   chrome.tabs.create({
-    url: 'https://github.com/yourusername/pkm5e-extension'
+    url: 'https://github.com/nx23/pkm5e-extension'
   });
 });
 

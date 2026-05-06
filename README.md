@@ -37,7 +37,7 @@ A Chrome Extension that seamlessly integrates [Pokemon 5e](https://poke5e.app/) 
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/pkm5e-extension.git
+   git clone https://github.com/nx23/pkm5e-extension.git
    cd pkm5e-extension
    ```
 
