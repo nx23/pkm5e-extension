@@ -6,6 +6,50 @@
 // Import logger utilities
 importScripts('utils/logger.js');
 
+// Keep the service worker alive in Firefox (MV3 workers are killed after inactivity)
+chrome.alarms.create('keepAlive', { periodInMinutes: 0.4 });
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'keepAlive') {
+    log('Service worker keepalive ping');
+  }
+});
+
+/**
+ * Handle long-lived port connections from content scripts.
+ * connect() reliably wakes the service worker in Firefox MV3,
+ * unlike sendMessage() which may silently fail.
+ */
+chrome.runtime.onConnect.addListener(port => {
+  if (port.name !== 'poke5e-roll') return;
+
+  port.onMessage.addListener(async (request) => {
+    log('Port message received:', request.type);
+    try {
+      let response;
+      if (request.type === 'ROLL_REQUEST') {
+        response = await sendRollToRoll20(request.data);
+      } else if (request.type === 'ATTACK_REQUEST') {
+        const roll20Tab = await findRoll20Tab();
+        if (!roll20Tab) {
+          response = { success: false, error: 'No active Roll20 tab found.' };
+        } else {
+          response = await chrome.tabs.sendMessage(roll20Tab.id, {
+            type: 'EXECUTE_ATTACK',
+            data: request.data
+          });
+          response = response || { success: true };
+        }
+      } else {
+        response = { success: false, error: 'Unknown request type' };
+      }
+      port.postMessage(response);
+    } catch (error) {
+      log('❌ Port handler error:', error.message);
+      port.postMessage({ success: false, error: error.message });
+    }
+  });
+});
+
 /**
  * Find an active Roll20 tab
  * @returns {Promise<Object|null>} Tab object or null if not found

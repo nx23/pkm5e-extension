@@ -71,56 +71,49 @@ const ClickInjector = (() => {
   }
 
   /**
-   * Send roll request to background worker
+   * Send a roll or attack request to Roll20 via chrome.storage.local.
+   * Bypasses the service worker entirely — the Roll20 content script
+   * listens for storage changes and executes the roll directly.
+   * This is the most reliable approach across Chrome and Firefox MV3.
+   * @param {Object} payload - Message payload with `type` and `data`
+   */
+  function sendViaStorage(payload) {
+    if (!chrome.storage || !chrome.storage.local) {
+      showNotification('✗ Extension context not available', 'error');
+      log('Error: chrome.storage not available');
+      return;
+    }
+    chrome.storage.local.set({ poke5e_pendingRoll: payload }, () => {
+      if (chrome.runtime.lastError) {
+        log('❌ Storage write error:', chrome.runtime.lastError.message);
+        showNotification(`✗ ${chrome.runtime.lastError.message}`, 'error');
+        return;
+      }
+      log('✓ Roll data written to storage');
+    });
+  }
+
+  /**
+   * Send roll request to Roll20 via storage
    * @param {Object} rollContext - The roll context
    */
   function sendRollRequest(rollContext) {
-    try {
-      // Verify extension context
-      if (!chrome.runtime || !chrome.runtime.sendMessage) {
-        showNotification('✗ Extension context not available', 'error');
-        log('Error: Chrome extension context not available');
-        return;
-      }
-      
-      log('Sending ROLL_REQUEST to background:', rollContext);
-      
-      chrome.runtime.sendMessage({
-        type: 'ROLL_REQUEST',
-        data: {
-          rollType: rollContext.rollType,
-          stat: rollContext.stat,
-          modifier: rollContext.modifier,
-          label: rollContext.rollType === 'skill'
-            ? rollContext.stat
-            : `${rollContext.stat} ${rollContext.rollType}`,
-          diceFormula: `1d20+${rollContext.modifier}`,
-          characterName: DataParser.getCharacterName(),
-          sheetData: DataParser.getCompleteSheetData()
-        }
-      }, response => {
-        log('Response received from background:', response);
-        
-        if (chrome.runtime.lastError) {
-          const errorMsg = chrome.runtime.lastError.message;
-          log('❌ Chrome error:', errorMsg);
-          showNotification(`✗ Extension error: ${errorMsg}`, 'error');
-          return;
-        }
-        
-        if (response && response.success) {
-          log('✓ Roll executed successfully');
-          showNotification('✓ Roll sent to Roll20', 'success');
-        } else {
-          const error = response?.error || response?.message || 'Unknown error';
-          log('❌ Roll failed:', error);
-          showNotification(`✗ ${error}`, 'error');
-        }
-      });
-    } catch (error) {
-      log('❌ Exception in sendRollRequest:', error.message);
-      showNotification(`✗ Error: ${error.message}`, 'error');
-    }
+    log('Sending ROLL_REQUEST via storage:', rollContext);
+    showNotification('✓ Roll sent to Roll20', 'success');
+    sendViaStorage({
+      type: 'ROLL_REQUEST',
+      data: {
+        rollType: rollContext.rollType,
+        stat: rollContext.stat,
+        modifier: rollContext.modifier,
+        label: rollContext.rollType === 'skill'
+          ? rollContext.stat
+          : `${rollContext.stat} ${rollContext.rollType}`,
+        diceFormula: `1d20+${rollContext.modifier}`,
+        characterName: DataParser.getCharacterName()
+      },
+      _id: Date.now()
+    });
   }
 
   /**
@@ -319,26 +312,16 @@ const ClickInjector = (() => {
         e.preventDefault();
         e.stopPropagation();
 
-        const characterName = DataParser.getCharacterName();
-        chrome.runtime.sendMessage({
+        showNotification(`⚔ ${moveName} rolled!`, 'success');
+        sendViaStorage({
           type: 'ATTACK_REQUEST',
           data: {
             moveName,
-            characterName,
+            characterName: DataParser.getCharacterName(),
             toHit,
-            damageDice,
-          }
-        }, response => {
-          if (chrome.runtime.lastError) {
-            log('❌ Chrome error:', chrome.runtime.lastError.message);
-            showNotification(`✗ ${chrome.runtime.lastError.message}`, 'error');
-            return;
-          }
-          if (response && response.success) {
-            showNotification(`⚔ ${moveName} rolled!`, 'success');
-          } else {
-            showNotification(`✗ ${response?.error || 'Unknown error'}`, 'error');
-          }
+            damageDice
+          },
+          _id: Date.now()
         });
       });
 

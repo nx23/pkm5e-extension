@@ -473,9 +473,69 @@ const Roll20Integration = (() => {
     }
   }
 
+  /**
+   * Listen for roll requests from poke5e via chrome.storage.local.
+   * Bypasses the service worker — storage changes fire instantly in
+   * content scripts regardless of service worker state.
+   */
+  function setupStorageListener() {
+    log('Setting up storage listener for roll requests...');
+
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local' || !changes.poke5e_pendingRoll) return;
+      const roll = changes.poke5e_pendingRoll.newValue;
+      if (!roll) return;
+
+      log('Storage roll request received:', roll.type, roll._id);
+
+      // Clear immediately to avoid re-processing on page reload
+      chrome.storage.local.remove('poke5e_pendingRoll');
+
+      if (roll.type === 'ROLL_REQUEST') {
+        injectRollIntoChat(roll.data);
+
+      } else if (roll.type === 'ATTACK_REQUEST') {
+        const { moveName, characterName, toHit, damageDice } = roll.data;
+        const charDisplay = characterName
+          ? (typeof characterName === 'object' ? characterName.character : characterName)
+          : null;
+        const prefix = charDisplay ? `${charDisplay} | ` : '';
+
+        if (toHit !== null && toHit !== undefined) {
+          injectRollIntoChat({
+            stat: moveName,
+            rollType: 'attack',
+            modifier: toHit,
+            label: `${prefix}${moveName} | Attack`,
+            characterName: null,
+          });
+        }
+        if (damageDice) {
+          setTimeout(() => {
+            const chatInput = findChatInput();
+            if (!chatInput) return;
+            const damageLabel = `${prefix}${moveName} | Damage (${damageDice})`;
+            const command = `/roll ${damageDice} [${damageLabel}]`;
+            chatInput.value = command;
+            chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+            chatInput.dispatchEvent(new Event('change', { bubbles: true }));
+            const sendButton = document.querySelector('#chatSendBtn');
+            if (sendButton) sendButton.click();
+            setTimeout(() => Roll20Integration.markExtensionRoll(), 50);
+            setTimeout(() => Roll20Integration.markExtensionRoll(), 200);
+            log('✓ Damage roll injected via storage:', command);
+          }, 400);
+        }
+      }
+    });
+
+    log('✓ Storage listener active');
+  }
+
   // Public API
   return {
     setupMessageListener,
+    setupStorageListener,
     injectRollIntoChat,
     generateDiceFormula,
     findChatInput,
@@ -488,6 +548,7 @@ const Roll20Integration = (() => {
 
 // Initialize on page load
 Roll20Integration.setupMessageListener();
+Roll20Integration.setupStorageListener();
 Roll20Integration.injectCustomStyles();
 
 // Give page time to load, then setup observer

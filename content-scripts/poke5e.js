@@ -117,7 +117,10 @@ function checkBackgroundStatus() {
       { type: 'CHECK_STATUS' },
       response => {
         if (chrome.runtime.lastError) {
-          console.warn('Background worker error:', chrome.runtime.lastError.message);
+          // Silently ignore "no receiver" errors — the service worker may be asleep
+          if (!chrome.runtime.lastError.message.includes('Could not establish connection')) {
+            console.warn('Background worker error:', chrome.runtime.lastError.message);
+          }
           return;
         }
         if (response && response.roll20Found) {
