@@ -357,8 +357,6 @@ ClickInjector.showNotification(msg, type) // Display notification ('info', 'succ
 StorageManager.getSetting(key, defaultValue)  // Get a setting from Chrome storage
 StorageManager.setSetting(key, value)         // Save a setting
 StorageManager.getAllSettings()               // Get all settings object
-StorageManager.addToRollHistory(rollData)     // Log a roll to history
-StorageManager.getRollHistory(limit)          // Retrieve last N rolls
 ```
 
 ### Roll20Integration (content-scripts/roll20.js)
