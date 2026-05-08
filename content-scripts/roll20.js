@@ -292,9 +292,10 @@ const Roll20Integration = (() => {
         border-radius: 3px !important;
       }
 
-      /* Player name */
+      /* Keep player name visible */
       div.message.poke5e-roll span.by {
         font-weight: 700 !important;
+        display: inline !important;
       }
 
       /* Always hide "rolling 1d20+4 [label]" text */
@@ -305,6 +306,47 @@ const Roll20Integration = (() => {
         display: none !important;
       }
 
+      /* Character name - shown as subtitle */
+      div.message.poke5e-roll div.poke5e-char-header {
+        display: block !important;
+        font-weight: 600 !important;
+        font-size: 1em !important;
+        color: #666 !important;
+        margin: 6px 0 8px 0 !important;
+        padding: 0 !important;
+        border: none !important;
+      }
+
+      /* Roll label (type of roll) - centered and bold */
+      span.poke5e-label {
+        display: block !important;
+        width: 100% !important;
+        font-weight: 600 !important;
+        font-size: 1em !important;
+        color: #666 !important;
+        margin-bottom: 3px !important;
+        text-align: center !important;
+        padding: 4px 0 !important;
+      }
+
+      /* Formatted formula row - dice and modifiers */
+      div.message.poke5e-roll div.formattedformula {
+        display: flex !important;
+        align-items: center !important;
+        text-align: center !important;
+        justify-content: center !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+        background: #ffffff !important;
+        border: 1px solid #e0e0e0 !important;
+        border-radius: 3px !important;
+        padding: 8px 10px !important;
+        margin: 6px 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        font-size: 1.2em !important;
+      }
+
       /* DEFAULT: total as full-width centered gray box */
       div.message.poke5e-roll div.rolled {
         display: block !important;
@@ -312,29 +354,16 @@ const Roll20Integration = (() => {
         background: #e8e8e8 !important;
         border: 1px solid #c8c8c8 !important;
         border-radius: 3px !important;
-        padding: 5px 0 !important;
-        font-size: 1.2em !important;
+        padding: 4px 0 !important;
+        font-size: 1.6em !important;
         font-weight: 700 !important;
         color: #333 !important;
-        margin: 3px 0 !important;
+        margin: 6px 0 0 0 !important;
         width: 100% !important;
         box-sizing: border-box !important;
       }
 
-      div.message.poke5e-roll div.formattedformula {
-        display: flex !important;
-        align-items: center !important;
-        text-align: center !important;
-        justify-content: center !important;
-        flex-wrap: wrap !important;
-        gap: 4px !important;
-        background: #f5f5f5 !important;
-        border: 1px solid #ddd !important;
-        border-radius: 3px !important;
-        padding: 4px 10px !important;
-        margin: 2px 0 !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
+      /* Crit success/fail colors on dice */
       }
 
       /* Crit success/fail colors on dice */
@@ -423,23 +452,42 @@ const Roll20Integration = (() => {
 
     const formulaEl = messageEl.querySelector('.formula');
     const formattedEl = messageEl.querySelector('.formattedformula');
+    
     if (!formulaEl || !formattedEl) return;
 
-    // Inject character name header box if provided
-    const nameData = characterName || (typeof characterName === 'object' ? characterName : null);
-    const charDisplay = nameData
-      ? (nameData.character || null)
-      : null;
+    // Extract label and split by " | " separator
+    const labelMatch = formulaEl.textContent.match(/\[([^\]]+)\]/);
+    if (!labelMatch) return;
+    
+    const fullLabel = labelMatch[1];
+    const parts = fullLabel.split(' | ');
+    const charName = parts.length > 1 ? parts[0] : null;
+    const rollLabel = parts.length > 1 ? parts.slice(1).join(' | ') : fullLabel;
 
-    if (charDisplay) {
+    // Determine name to display
+    const nameDisplay = characterName 
+      ? (typeof characterName === 'object' ? characterName.character : characterName)
+      : charName;
+
+    // 1. Insert character name header right before formattedEl (as a sibling)
+    if (nameDisplay && !messageEl.querySelector('.poke5e-char-header')) {
       const header = document.createElement('div');
       header.className = 'poke5e-char-header';
-      header.textContent = charDisplay;
-      messageEl.insertBefore(header, messageEl.firstChild);
-      log(`✓ Injected character header: ${charDisplay}`);
+      header.textContent = nameDisplay;
+      // Insert right before formattedEl
+      formattedEl.parentNode.insertBefore(header, formattedEl);
+      log(`✓ Injected character header: ${nameDisplay}`);
     }
 
-    // Wrap bare text nodes (e.g. "+6") in spans so CSS can target them
+    // 2. Create roll label (inside formattedformula at the start)
+    if (rollLabel && !formattedEl.querySelector('.poke5e-label')) {
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'poke5e-label';
+      labelSpan.textContent = rollLabel;
+      formattedEl.insertBefore(labelSpan, formattedEl.firstChild);
+    }
+
+    // 3. Wrap bare text nodes (modifiers like "+6")
     Array.from(formattedEl.childNodes).forEach(node => {
       if (node.nodeType === 3 && node.textContent.trim()) {
         const span = document.createElement('span');
@@ -448,15 +496,6 @@ const Roll20Integration = (() => {
         formattedEl.replaceChild(span, node);
       }
     });
-
-    // Inject label [WIS save] at the start of the breakdown row
-    const labelMatch = formulaEl.textContent.match(/\[([^\]]+)\]/);
-    if (labelMatch) {
-      const labelSpan = document.createElement('span');
-      labelSpan.className = 'poke5e-label';
-      labelSpan.textContent = labelMatch[1];
-      formattedEl.insertBefore(labelSpan, formattedEl.firstChild);
-    }
 
     log('✓ Formatted roll message');
   }
