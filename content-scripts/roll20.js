@@ -63,11 +63,22 @@ const Roll20Integration = (() => {
       ? (typeof characterName === 'object' ? characterName.character : characterName)
       : null;
 
-    const rollLabel = charDisplay
-      ? `${charDisplay} | ${label || `${stat} ${rollType}`}`
-      : (label || `${stat} ${rollType}`);
+    let diceFormula = '1d20';
+    if (rollData.advantage) {
+      diceFormula = '2d20kh1'; // Roll 2d20, keep highest 1
+    } else if (rollData.disadvantage) {
+      diceFormula = '2d20kl1'; // Roll 2d20, keep lowest 1
+    }
 
-    return `1d20${modifierStr} [${rollLabel}]`;
+    // ✨ Add [ADV] or [DIS] tag to label
+    const advantageTag = rollData.advantage ? 'ADV ' : (rollData.disadvantage ? 'DIS ' : '');
+    const labelWithTag = label ? `${advantageTag}${label}` : `${advantageTag}${stat} ${rollType}`;
+    
+    const rollLabel = charDisplay
+      ? `${charDisplay} | ${labelWithTag}`
+      : labelWithTag;
+
+    return `${diceFormula}${modifierStr} [${rollLabel}]`;
   }
 
   /**

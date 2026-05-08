@@ -11,12 +11,16 @@ const ClickInjector = (() => {
    * Create a roll context from the clicked element
    * @param {HTMLElement} element - The element that was clicked
    * @param {string} rollType - Type of roll (save, skill, ability, attack)
+   * @param {MouseEvent} event - The click event (para detectar Shift/Ctrl)
    * @returns {Object} Roll context
    */
-  function createRollContext(element, rollType) {
+  function createRollContext(element, rollType, event) {
     const text = element.innerText.trim();
     let stat = null;
     let modifier = 0;
+
+    const hasAdvantage = event && event.shiftKey;
+    const hasDisadvantage = event && event.ctrlKey;
 
     // Determine which ability/stat
     const abilityMatch = text.match(/(STR|DEX|CON|INT|WIS|CHA)/i);
@@ -63,7 +67,9 @@ const ClickInjector = (() => {
       stat: stat,
       modifier: modifier,
       label: text,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      advantage: hasAdvantage,
+      disadvantage: hasDisadvantage
     };
 
     log('Created roll context:', context);
@@ -96,7 +102,9 @@ const ClickInjector = (() => {
             : `${rollContext.stat} ${rollContext.rollType}`,
           diceFormula: `1d20+${rollContext.modifier}`,
           characterName: DataParser.getCharacterName(),
-          sheetData: DataParser.getCompleteSheetData()
+          sheetData: DataParser.getCompleteSheetData(),
+          advantage: rollContext.advantage,
+          disadvantage: rollContext.disadvantage
         }
       }, response => {
         log('Response received from background:', response);
@@ -197,7 +205,8 @@ const ClickInjector = (() => {
       addHoverEffect(dt);
       dt.addEventListener('click', (e) => {
         e.stopPropagation();
-        sendRollRequest({ rollType: 'check', stat, modifier });
+        const rollContext = createRollContext(dt, 'check', e);
+        sendRollRequest({ rollType: 'check', stat, modifier, ...rollContext });
       });
       injected++;
       log(`✓ Ability check handler injected: ${stat} (${modifier >= 0 ? '+' : ''}${modifier})`);
@@ -226,7 +235,8 @@ const ClickInjector = (() => {
       addHoverEffect(dt);
       dt.addEventListener('click', (e) => {
         e.stopPropagation();
-        sendRollRequest({ rollType: 'save', stat, modifier });
+        const rollContext = createRollContext(dt, 'save', e);
+        sendRollRequest({ rollType: 'save', stat, modifier, ...rollContext });
       });
       injected++;
       log(`✓ Save handler injected: ${stat} (${modifier >= 0 ? '+' : ''}${modifier})`);
@@ -255,7 +265,8 @@ const ClickInjector = (() => {
       addHoverEffect(dt);
       dt.addEventListener('click', (e) => {
         e.stopPropagation();
-        sendRollRequest({ rollType: 'skill', stat: skill, modifier });
+        const rollContext = createRollContext(dt, 'skill', e);
+        sendRollRequest({ rollType: 'skill', stat: skill, modifier, ...rollContext });
       });
       injected++;
       log(`✓ Skill handler injected: ${skill} (${modifier >= 0 ? '+' : ''}${modifier})`);
@@ -319,6 +330,7 @@ const ClickInjector = (() => {
         e.preventDefault();
         e.stopPropagation();
 
+        const rollContext = createRollContext(nameLink, 'attack', e);
         const characterName = DataParser.getCharacterName();
         chrome.runtime.sendMessage({
           type: 'ATTACK_REQUEST',
@@ -327,6 +339,8 @@ const ClickInjector = (() => {
             characterName,
             toHit,
             damageDice,
+            advantage: rollContext.advantage,
+            disadvantage: rollContext.disadvantage
           }
         }, response => {
           if (chrome.runtime.lastError) {
