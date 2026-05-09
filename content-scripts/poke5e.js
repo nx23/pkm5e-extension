@@ -5,25 +5,52 @@
 
 log('Content script loaded on poke5e.app');
 
-// Inject dice icon URLs into CSS. The base d20.png is always applied.
-// Holding Shift swaps to d20-adv.png (advantage) and Ctrl to d20-dadv.png (disadvantage)
-// via classes added to <body> by the keyboard listeners below.
+// Create a single floating dice icon element anchored to <body>.
+// This avoids being clipped by overflow:hidden on any ancestor in the site's UI.
 (function injectDiceIconStyle() {
   const d20    = chrome.runtime.getURL('assets/d20.png');
   const d20Adv = chrome.runtime.getURL('assets/d20-adv.png');
   const d20Dis = chrome.runtime.getURL('assets/d20-dadv.png');
 
-  const style = document.createElement('style');
-  style.textContent = [
-    `.poke5e-hover::before { background-image: url("${d20}"); }`,
-    `body.poke5e-advantage  .poke5e-hover::before { background-image: url("${d20Adv}"); }`,
-    `body.poke5e-disadvantage .poke5e-hover::before { background-image: url("${d20Dis}"); }`,
-  ].join('\n');
-  document.head.appendChild(style);
-})();
+  // Floating icon element
+  const icon = document.createElement('div');
+  icon.id = 'poke5e-dice-icon';
+  icon.style.backgroundImage = `url("${d20}")`;
+  document.body.appendChild(icon);
 
-// Listen for Shift / Ctrl to update the dice icon on all rollable elements.
-(function setupDiceIconKeyListeners() {
+  // Update icon image based on advantage/disadvantage state
+  function updateIconImage() {
+    if (document.body.classList.contains('poke5e-advantage')) {
+      icon.style.backgroundImage = `url("${d20Adv}")`;
+    } else if (document.body.classList.contains('poke5e-disadvantage')) {
+      icon.style.backgroundImage = `url("${d20Dis}")`;
+    } else {
+      icon.style.backgroundImage = `url("${d20}")`;
+    }
+  }
+
+  // Show icon next to hovered rollable elements
+  document.addEventListener('mouseover', (e) => {
+    const target = e.target.closest('.poke5e-hover');
+    if (!target) {
+      icon.classList.remove('visible');
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    icon.style.left = (rect.left - 28) + 'px';
+    icon.style.top  = (rect.top + rect.height / 2 - 12) + 'px';
+    updateIconImage();
+    icon.classList.add('visible');
+  });
+
+  document.addEventListener('mouseout', (e) => {
+    if (!e.target.closest('.poke5e-hover')) {
+      icon.classList.remove('visible');
+    }
+  });
+
+  // Update body classes and icon image on Shift/Ctrl press/release.
+  // updateIconImage() is called AFTER the class change so it reads the correct state.
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Shift') {
       document.body.classList.add('poke5e-advantage');
@@ -32,6 +59,7 @@ log('Content script loaded on poke5e.app');
       document.body.classList.add('poke5e-disadvantage');
       document.body.classList.remove('poke5e-advantage');
     }
+    updateIconImage();
   });
 
   document.addEventListener('keyup', (e) => {
@@ -40,11 +68,13 @@ log('Content script loaded on poke5e.app');
     } else if (e.key === 'Control') {
       document.body.classList.remove('poke5e-disadvantage');
     }
+    updateIconImage();
   });
 
   // Clear both states if the window loses focus (e.g. Alt+Tab while holding a key)
   window.addEventListener('blur', () => {
     document.body.classList.remove('poke5e-advantage', 'poke5e-disadvantage');
+    updateIconImage();
   });
 })();
 
