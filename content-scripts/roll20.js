@@ -279,6 +279,9 @@ const Roll20Integration = (() => {
 
   /**
    * Check a specific message element for a natural 20 (critical)
+   * Only considers dice that were actually kept
+   * dropped dice (from advantage/disadvantage rolls)
+   * are ignored via the `.dropped` class that Roll20 adds to discarded dice.
    * @param {HTMLElement} messageEl
    * @returns {boolean}
    */
@@ -287,6 +290,12 @@ const Roll20Integration = (() => {
     log(`Found ${diceRolls.length} d20 diceroll elements`);
 
     for (const roll of diceRolls) {
+      // Skip dice that Roll20 discarded (e.g. the low die in 2d20kh1, or high die in 2d20kl1)
+      if (roll.classList.contains('dropped')) {
+        log(`  Skipping dropped die: text="${roll.textContent.trim()}"`);
+        continue;
+      }
+
       const rollText = roll.textContent.trim();
       const classes = roll.className;
       log(`  d20 diceroll: text="${rollText}", classes="${classes}"`);
