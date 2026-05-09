@@ -342,7 +342,7 @@ const Roll20Integration = (() => {
       if (request.type === 'EXECUTE_ATTACK') {
         log('Processing EXECUTE_ATTACK request...');
         try {
-          const { moveName, characterName, toHit, damageDice } = request.data;
+          const { moveName, characterName, toHit, damageDice, advantage, disadvantage } = request.data;
           const charDisplay = characterName
             ? (typeof characterName === 'object' ? characterName.character : characterName)
             : null;
@@ -358,6 +358,8 @@ const Roll20Integration = (() => {
               modifier: toHit,
               label: `${prefix}${moveName} | Attack`,
               characterName: null,
+              advantage,
+              disadvantage,
             });
           }
 
