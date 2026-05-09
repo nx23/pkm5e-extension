@@ -85,67 +85,12 @@ const StorageManager = (() => {
     });
   }
 
-  /**
-   * Add a roll to history
-   * @param {Object} rollData - Data from the roll
-   * @returns {Promise<boolean>} Success status
-   */
-  function addToRollHistory(rollData) {
-    return new Promise((resolve) => {
-      chrome.storage.local.get(['rollHistory'], (result) => {
-        const history = result.rollHistory || [];
-        history.push({
-          ...rollData,
-          timestamp: Date.now()
-        });
-
-        // Keep only last 100 rolls
-        if (history.length > 100) {
-          history.shift();
-        }
-
-        chrome.storage.local.set({ rollHistory: history }, () => {
-          resolve(!chrome.runtime.lastError);
-        });
-      });
-    });
-  }
-
-  /**
-   * Get roll history
-   * @param {number} limit - Max number of rolls to retrieve
-   * @returns {Promise<Array>} Roll history
-   */
-  function getRollHistory(limit = 20) {
-    return new Promise((resolve) => {
-      chrome.storage.local.get(['rollHistory'], (result) => {
-        const history = result.rollHistory || [];
-        resolve(history.slice(-limit).reverse());
-      });
-    });
-  }
-
-  /**
-   * Clear roll history
-   * @returns {Promise<boolean>} Success status
-   */
-  function clearRollHistory() {
-    return new Promise((resolve) => {
-      chrome.storage.local.remove(['rollHistory'], () => {
-        resolve(!chrome.runtime.lastError);
-      });
-    });
-  }
-
   // Public API
   return {
     getSetting,
     setSetting,
     getAllSettings,
     resetSettings,
-    addToRollHistory,
-    getRollHistory,
-    clearRollHistory,
     DEFAULT_SETTINGS
   };
 })();

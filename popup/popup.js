@@ -111,27 +111,6 @@ function showFeedback(message) {
 }
 
 /**
- * View roll history
- */
-async function viewRollHistory() {
-  const history = await StorageManager.getRollHistory(10);
-
-  if (history.length === 0) {
-    alert('No roll history yet. Make some rolls in Roll20!');
-    return;
-  }
-
-  let historyText = 'Recent Rolls:\n\n';
-  history.forEach((roll, index) => {
-    const date = new Date(roll.timestamp);
-    historyText += `${index + 1}. [${date.toLocaleTimeString()}] ${roll.label || 'Unknown'}\n`;
-    historyText += `   Formula: ${roll.diceFormula}\n\n`;
-  });
-
-  alert(historyText);
-}
-
-/**
  * Reset all settings
  */
 async function resetAllSettings() {
@@ -140,7 +119,6 @@ async function resetAllSettings() {
   }
 
   await StorageManager.resetSettings();
-  await StorageManager.clearRollHistory();
 
   // Reload settings
   await loadSettings();
