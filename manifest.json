@@ -43,7 +43,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["assets/d20.png"],
+      "resources": ["assets/d20.png", "assets/d20-adv.png", "assets/d20-dadv.png"],
       "matches": ["https://poke5e.app/*", "http://poke5e.app/*"]
     }
   ]

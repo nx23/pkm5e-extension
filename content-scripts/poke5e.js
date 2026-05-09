@@ -5,12 +5,47 @@
 
 log('Content script loaded on poke5e.app');
 
-// Inject dice icon URL into CSS for .poke5e-hover::after
+// Inject dice icon URLs into CSS. The base d20.png is always applied.
+// Holding Shift swaps to d20-adv.png (advantage) and Ctrl to d20-dadv.png (disadvantage)
+// via classes added to <body> by the keyboard listeners below.
 (function injectDiceIconStyle() {
-  const iconUrl = chrome.runtime.getURL('assets/d20.png');
+  const d20    = chrome.runtime.getURL('assets/d20.png');
+  const d20Adv = chrome.runtime.getURL('assets/d20-adv.png');
+  const d20Dis = chrome.runtime.getURL('assets/d20-dadv.png');
+
   const style = document.createElement('style');
-  style.textContent = `.poke5e-hover::before { background-image: url("${iconUrl}"); }`;
+  style.textContent = [
+    `.poke5e-hover::before { background-image: url("${d20}"); }`,
+    `body.poke5e-advantage  .poke5e-hover::before { background-image: url("${d20Adv}"); }`,
+    `body.poke5e-disadvantage .poke5e-hover::before { background-image: url("${d20Dis}"); }`,
+  ].join('\n');
   document.head.appendChild(style);
+})();
+
+// Listen for Shift / Ctrl to update the dice icon on all rollable elements.
+(function setupDiceIconKeyListeners() {
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Shift') {
+      document.body.classList.add('poke5e-advantage');
+      document.body.classList.remove('poke5e-disadvantage');
+    } else if (e.key === 'Control') {
+      document.body.classList.add('poke5e-disadvantage');
+      document.body.classList.remove('poke5e-advantage');
+    }
+  });
+
+  document.addEventListener('keyup', (e) => {
+    if (e.key === 'Shift') {
+      document.body.classList.remove('poke5e-advantage');
+    } else if (e.key === 'Control') {
+      document.body.classList.remove('poke5e-disadvantage');
+    }
+  });
+
+  // Clear both states if the window loses focus (e.g. Alt+Tab while holding a key)
+  window.addEventListener('blur', () => {
+    document.body.classList.remove('poke5e-advantage', 'poke5e-disadvantage');
+  });
 })();
 
 log('Available modules:', {
