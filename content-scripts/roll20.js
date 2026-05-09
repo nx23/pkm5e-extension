@@ -70,9 +70,22 @@ const Roll20Integration = (() => {
       diceFormula = '2d20kl1'; // Roll 2d20, keep lowest 1
     }
 
-    // ✨ Add [ADV] or [DIS] tag to label
+    // Add ADV or DIS tag immediately before the move/roll name
+    // If the label already contains " | " (character name embedded by EXECUTE_ATTACK),
+    // insert the tag after the first separator so the result is "CharName | ADV MoveName | Attack"
+    // instead of "ADV CharName | MoveName | Attack".
     const advantageTag = rollData.advantage ? 'ADV ' : (rollData.disadvantage ? 'DIS ' : '');
-    const labelWithTag = label ? `${advantageTag}${label}` : `${advantageTag}${stat} ${rollType}`;
+    let labelWithTag;
+    if (!label) {
+      labelWithTag = `${advantageTag}${stat} ${rollType}`;
+    } else if (advantageTag) {
+      const pipeIndex = label.indexOf(' | ');
+      labelWithTag = pipeIndex !== -1
+        ? label.slice(0, pipeIndex + 3) + advantageTag + label.slice(pipeIndex + 3)
+        : `${advantageTag}${label}`;
+    } else {
+      labelWithTag = label;
+    }
     
     const rollLabel = charDisplay
       ? `${charDisplay} | ${labelWithTag}`

@@ -19,8 +19,11 @@ const ClickInjector = (() => {
     let stat = null;
     let modifier = 0;
 
-    const hasAdvantage = event && event.shiftKey;
-    const hasDisadvantage = event && event.ctrlKey;
+    // Read modifier state from the click event AND from body classes (set by key listeners
+    // in poke5e.js). The body class is a more reliable source when the browser intercepts
+    // Shift+Click on <a> elements (e.g. "open in new window" behaviour in Chrome).
+    const hasAdvantage    = (event && event.shiftKey) || document.body.classList.contains('poke5e-advantage');
+    const hasDisadvantage = (event && event.ctrlKey)  || document.body.classList.contains('poke5e-disadvantage');
 
     // Determine which ability/stat
     const abilityMatch = text.match(/(STR|DEX|CON|INT|WIS|CHA)/i);
