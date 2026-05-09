@@ -1,203 +1,194 @@
 # Pokemon 5e Roll20 Extension
 
-### Install using [Chrome WebStore - Poke5eRoll20](https://chromewebstore.google.com/detail/alellhfnhemmnlbdaaafegkgohkiioik?utm_source=item-share-cb)
+If you enjoy the extension and want to support its development:
 
-A Chrome Extension that seamlessly integrates [Pokemon 5e](https://poke5e.app/) character sheets with [Roll20](https://roll20.net/), enabling **one-click dice rolling directly from your character abilities, saves, skills, and attacks**.
+<a href='https://ko-fi.com/N4N71Z6D5V' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
-**No more copy-pasting formulas!** Click an ability save, attack, or skill on your Pokemon 5e sheet and watch the dice formula instantly appear in Roll20 chat.
+[Chrome WebStore - Poke5eRoll20](https://chromewebstore.google.com/detail/alellhfnhemmnlbdaaafegkgohkiioik?utm_source=item-share-cb)
 
-> **Current Version: 1.1** — Now with attack rolls and automatic handler reinjection on Pokemon switch!
+A Web Browser Extension (Manifest V3) that integrates [Pokemon 5e](https://poke5e.app/) character sheets with [Roll20](https://roll20.net/), enabling one-click dice rolling directly from abilities, saves, skills, and attacks.
+
+No more copy-pasting formulas. Click a stat or move on your Pokemon sheet and the dice command appears in Roll20 chat instantly.
 
 ## Features
 
-✨ **Current Version (1.1)**
+### Version 1.2
 
-**Core Functionality**
-- 🎲 **Ability Checks** — Click ability scores to roll d20+modifier (e.g., "Scyther | STR check")
-- 💾 **Saving Throws** — Click ability saves to roll d20+save modifier (e.g., "Scyther | STR save")
-- 🎯 **Skill Checks** — Click skills to roll d20+bonus (e.g., "Scyther | Acrobatics")
-- ⚔️ **Attack Rolls** — Click move names to roll d20+toHit (hit) and damage dice (e.g., "Quick Attack | Damage (1d6)")
-  - Automatically shows damage dice used in the label
-  - Handles STAB indicators correctly
-- 🎨 **Automatic Formatting** — Rolls styled with `poke5e-roll` CSS class for visual distinction
-- 🔄 **SPA Navigation** — Automatically reinjects handlers when switching Pokémon on poke5e.app
+**Rolls**
+- **Ability Checks** — Click ability scores to roll `1d20+modifier` (e.g. `Scyther | STR check`)
+- **Saving Throws** — Click saves to roll `1d20+save` (e.g. `Scyther | STR save`)
+- **Skill Checks** — Click skills to roll `1d20+bonus` (e.g. `Scyther | Acrobatics`)
+- **Attack Rolls** — Click a move name to roll hit and damage automatically:
+  - Hit: `1d20+7 [Scyther | Quick Attack | Attack]`
+  - Damage: `1d6 [Scyther | Quick Attack | Damage (1d6)]`
+  - STAB alert icons are stripped from damage dice automatically
 
-**Platform Integration**
-- Automatic dice injection into Roll20 chat
-- Real-time connection status checking
+**Critical Hits**
+- On a natural 20, damage dice are doubled automatically (e.g. `2d6+4` → `4d6+4`)
+- Detection uses Roll20's `.critsuccess` class via MutationObserver — no timing hacks
 
-🚀 **Planned Features**
-- Advantage/disadvantage toggling
+**Advantage / Disadvantage**
+- Hold **Shift** before clicking → rolls `2d20kh1` (keep highest), label shows `ADV`
+- Hold **Ctrl** before clicking → rolls `2d20kl1` (keep lowest), label shows `DIS`
+- The dice icon changes to green (Shift) or red (Ctrl) to indicate the current mode
+
+**Visual Feedback on poke5e.app**
+- A floating dice icon appears next to any rollable element on hover
+- The icon is positioned via JavaScript and rendered above all site UI (uses `position: fixed` on `<body>`, so `overflow: hidden` on site elements cannot clip it)
+- Temporary toast notifications confirm each roll or report errors
+
+**Roll Formatting on Roll20**
+- Extension rolls are styled with a distinct visual theme injected into Roll20's chat
+- Character name and roll label are extracted from the formula and displayed as a header
+- Critical successes and critical failures receive color highlights
+
+**SPA Navigation**
+- Automatically reinjects click handlers when you switch Pokémon on poke5e.app (no page reload needed)
+
+**Planned Features**
 - Spell save DC calculations
-- Custom hotkeys
-- Sound notifications
 - Critical hit highlighting
 
 ## Installation
 
 ### From Source (Development)
 
-1. **Clone the repository**
+1. Clone the repository:
    ```bash
    git clone https://github.com/nx23/pkm5e-extension.git
    cd pkm5e-extension
    ```
 
-2. **Load in Chrome**
-   - Open Chrome and go to `chrome://extensions/`
-   - Enable "Developer mode" (top right)
-   - Click "Load unpacked"
-   - Select the `pkm5e-extension` folder
+2. Open Chrome and go to `chrome://extensions/`
 
-3. **Verify Installation**
-   - Visit `https://poke5e.app/`
-   - You should see a notification: "Pokemon 5e Roll20 Extension Active"
-   - The extension icon should appear in your toolbar
+3. Enable **Developer mode** (top-right toggle)
 
-### From Chrome Web Store (Coming Soon)
+4. Click **Load unpacked** and select the `pkm5e-extension` folder
 
-[Chrome WebStore - Poke5eRoll20](https://chromewebstore.google.com/detail/alellhfnhemmnlbdaaafegkgohkiioik?utm_source=item-share-cb)
+5. Visit `https://poke5e.app/` — you should see a "Pokemon 5e Roll20 Extension Active" notification
+
 
 ## Quick Start
 
-### Setup Steps
+1. Open both tabs:
+   - `https://poke5e.app/` — your character sheet
+   - `https://roll20.net/` — your campaign
 
-1. **Open both tabs:**
-   - Tab 1: Pokemon 5e character sheet (https://poke5e.app/)
-   - Tab 2: Roll20 campaign (https://roll20.net/)
+2. Click the extension icon in the toolbar and confirm **Roll20 Tab: Connected**
 
-2. **Check connection:**
-   - Click the extension icon 🎲 in your toolbar
-   - Should show: "Roll20 Tab: 🟢 Connected"
-   - If red (🟤), refresh your Roll20 tab and try again
+3. On your Pokemon sheet, hover over any ability, save, skill, or move name — a dice icon appears to the left
 
-3. **Make your first roll:**
-   - On the Pokemon 5e sheet, find any **Saves** section
-   - Hover over "STR" (or any ability)
-   - You'll see a dice emoji (🎲) and pointer cursor
-   - Click it
-   - Look at your Roll20 tab — the formula appears in chat input!
-   - Press Enter to send the roll or make edits
-## Usage Guide
+4. Click to inject the roll formula into Roll20 chat
 
-### Rolling Ability Checks
+## Usage
 
-1. Find the **Ability Scores** section on your Pokemon 5e sheet
-2. Hover over any ability (e.g., "STR 18 (+4)")
-3. Visual feedback:
-   - Element highlights (slight enlargement)
-   - A dice emoji (🎲) appears on hover
-   - Cursor changes to pointer
-4. Click to inject the check into Roll20 chat
-5. Formula: `1d20+4 [CharName | STR check]`
+### Ability Checks, Saves, and Skills
 
-### Rolling Saving Throws
+Hover over any rollable element and click. The formula is sent directly to Roll20 chat.
 
-1. Navigate to the **Saves** section on your Pokemon 5e sheet
-2. Hover over any ability save (e.g., "STR +5")
-3. Click to inject the save roll
-4. Formula: `1d20+5 [CharName | STR save]`
+| Roll type | Example formula |
+|---|---|
+| Ability check | `1d20+4 [Scyther \| STR check]` |
+| Saving throw | `1d20+5 [Scyther \| STR save]` |
+| Skill check | `1d20+7 [Scyther \| Acrobatics]` |
 
-### Rolling Skill Checks
+### Attacks
 
-1. Navigate to the **Skills** section
-2. Hover over any skill to see the rollable indicator
-3. Click to inject the skill check formula
-4. Formula: `1d20+7 [CharName | Acrobatics]`
+Click a move name to trigger two automatic rolls: hit, then damage.
 
-### Rolling Attacks
+```
+1d20+7 [Scyther | Quick Attack | Attack]
+1d6+2  [Scyther | Quick Attack | Damage (1d6+2)]
+```
 
-1. Navigate to the **Moves** section
-2. Hover over any move name (e.g., "Quick Attack")
-3. Click to execute the attack:
-   - **Hit Roll**: `1d20+7 [CharName | Quick Attack | Attack]`
-   - **Damage Roll**: `1d6 [CharName | Quick Attack | Damage (1d6)]` (400ms delay)
-4. Both rolls are automatically formatted with extension styling
+The damage roll waits for Roll20 to render the attack message before firing — critical detection then doubles the damage dice if a natural 20 is found.
+
+### Advantage and Disadvantage
+
+Hold the modifier key **before** clicking:
+
+| Key | Effect | Dice |
+|---|---|---|
+| Shift | Advantage | `2d20kh1` |
+| Ctrl | Disadvantage | `2d20kl1` |
+| *(none)* | Normal | `1d20` |
+
+The label in Roll20 chat will include `ADV` or `DIS` after the character name, e.g.:  
+`1d20+7 [Scyther | ADV Quick Attack | Attack]`
 
 ## Troubleshooting
 
-### Common Issues
-
-**Extension loads but I don't see the extension icon**
-- Make sure the extension is enabled in `chrome://extensions/`
-- Try refreshing the poke5e.app tab
-
 **Clickable elements aren't appearing**
-- Refresh both the poke5e.app and Roll20 tabs
-- Check that you're viewing the character sheet (not just the Pokémon Pokédex)
-- Open Developer Console (F12) on poke5e.app and check for error messages
+- Refresh the poke5e.app tab after loading the extension
+- Make sure you are on a character sheet, not just a Pokédex page
 
-**Rolls inject into chat but don't appear in Roll20**
-- Refresh your Roll20 tab
-- Make sure your Roll20 campaign is loaded and you have access to the chat
-- Check that another extension isn't blocking Roll20 chat messages
+**Roll20 chat doesn't receive the roll**
+- Refresh the Roll20 tab and wait for the campaign to fully load
+- Check the extension popup — if Roll20 shows as disconnected, reload the Roll20 tab
 
-**Rolls appear but aren't formatted (no background color)**
-- This was a bug in v1.0, fixed in v1.1 — update your extension
-- If issue persists, go to `chrome://extensions/` and click the refresh icon on this extension
+**Handlers disappear after switching Pokémon**
+- This should not happen — the extension watches for SPA navigation and reinjects automatically
+- If it does, refresh the poke5e.app tab
 
-**Handlers disappear when I switch Pokémon**
-- This was fixed in v1.1 — update your extension
-- The extension now auto-reinjects handlers every 500ms on URL changes (SPA navigation)
+### Logs
 
-**Damage dice shows weird characters (e.g., "2d8+7ⓘ")**
-- This was fixed in v1.1 — update your extension
-- The extension now strips STAB alert icons automatically
-
-### Checking Logs
-
-Logs are printed to the browser console with the `[PKM5e Roll20 Extension]` prefix:
+Both content scripts log to the browser console prefixed with `[PKM5e Roll20 Extension]`:
 
 ```
-[PKM5e Roll20 Extension] Initialization attempt 1/10...
-[PKM5e Roll20 Extension] ✓ Página carregou! Inicializando handlers...
+[PKM5e Roll20 Extension] Content script loaded on poke5e.app
 [PKM5e Roll20 Extension] Injected 18 ability handlers
 [PKM5e Roll20 Extension] Injected 6 save handlers
 [PKM5e Roll20 Extension] Injected 15 skill handlers
+[PKM5e Roll20 Extension] ✓ Attack handler injected: Bubble (toHit=5, damage=2d6+4)
 ```
+
+Open DevTools (F12) on poke5e.app or roll20.net to see them.
 
 ## Project Structure
 
 ```
 pkm5e-extension/
-├── manifest.json              # Extension configuration
-├── background.js              # Service worker (message routing)
-├── PROJECT_PLAN.md            # Detailed development plan
+├── manifest.json              # Extension manifest (Manifest V3)
+├── background.js              # Service worker — routes messages between tabs
 ├── README.md                  # This file
 │
 ├── content-scripts/
-│   ├── poke5e.js             # Main script for poke5e.app
-│   └── roll20.js             # Main script for roll20.net
+│   ├── poke5e.js             # Runs on poke5e.app — dice icon, roll dispatch
+│   └── roll20.js             # Runs on roll20.net — formula injection, formatting
 │
 ├── utils/
-│   ├── dataParser.js         # Pokemon sheet data extraction
-│   ├── clickInjector.js      # Click handler injection
-│   └── storage.js            # Settings persistence
+│   ├── logger.js             # Shared logging utility
+│   ├── dataParser.js         # Extracts ability scores, saves, skills, moves
+│   ├── clickInjector.js      # Injects click handlers on rollable elements
+│   └── storage.js            # Settings persistence (chrome.storage)
 │
 ├── popup/
 │   ├── popup.html            # Extension popup UI
-│   ├── popup.js              # Popup logic
+│   ├── popup.js              # Popup logic (connection status)
 │   └── popup.css             # Popup styles
 │
 ├── styles/
-│   └── poke5e-overlay.css    # Content script styling
+│   └── poke5e-overlay.css    # Styles injected into poke5e.app
 │
 └── assets/
-    ├── icon-16.png           # Icon 16x16
-    ├── icon-48.png           # Icon 48x48
-    └── icon-128.png          # Icon 128x128 (add these)
+    ├── d20.png               # Default dice icon
+    ├── d20-adv.png           # Dice icon when Shift is held (advantage)
+    ├── d20-dadv.png          # Dice icon when Ctrl is held (disadvantage)
+    └── icon-16.png           # Extension toolbar icon
 ```
 
-### Architecture Overview
+## Architecture
 
 ```
-User clicks on poke5e.app element (ability/save/skill/attack)
+User clicks rollable element on poke5e.app
     ↓
-ClickInjector detects click event
+clickInjector.js reads modifier keys (Shift/Ctrl) and builds roll context
     ↓
-Sends ROLL_REQUEST/ATTACK_REQUEST message to background.js
+Sends ROLL_REQUEST or ATTACK_REQUEST to background.js
     ↓
-Background.js finds Roll20 tab and forwards message
+background.js finds the active Roll20 tab, forwards as EXECUTE_ROLL / EXECUTE_ATTACK
+    ↓
+roll20.js injects /roll command into Roll20 chat input and fires send
     ↓
 Roll20.js injects /roll formula into chat input
     ↓
@@ -302,19 +293,6 @@ The extension uses **URL polling** to detect SPA navigation:
 
 This approach works reliably because content scripts run in an isolated world and can't intercept `history.pushState` calls.
 
-## Configuration
-
-### User Settings (Stored in Chrome)
-
-Located in: **Chrome → Settings → Advanced → Privacy and security → Site settings → Cookies and data**
-
-Available settings:
-- `extensionEnabled`: Toggle entire extension (default: true)
-- `notificationStyle`: 'toast' | 'badge' | 'console' (default: 'toast')
-- `enableDebug`: Enable debug logging (default: false)
-- `soundEnabled`: Play sound on successful rolls (default: false)
-- `rollNotationStyle`: 'verbose' | 'concise' (default: 'verbose')
-
 ## API Reference
 
 ### DataParser (utils/dataParser.js)
@@ -410,7 +388,14 @@ This extension is released under the **MIT License**, which allows you to freely
 
 ## Changelog
 
-### Version 1.1 (Current)
+### Version 1.2 (Current)
+- ✨ **Critical Hits** — Natural 20 doubles damage dice automatically (e.g. `2d6+4` → `4d6+4`)
+- ✨ **Advantage / Disadvantage** — Hold Shift or Ctrl before clicking to roll `2d20kh1` / `2d20kl1`
+- ✨ **ADV / DIS label** — Roll label in Roll20 chat reflects the modifier (e.g. `ADV Quick Attack | Attack`)
+- 🎨 **Dice icon states** — Icon changes to green (advantage) or red (disadvantage) while key is held
+- 🐛 Fixed dice icon being clipped by `overflow: hidden` on poke5e.app — now uses a body-level `position: fixed` element
+
+### Version 1.1
 - ✨ **Attack Rolls** — Click move names to roll hit and damage
 - ✨ Damage dice displayed in roll label (e.g., "Damage (1d6)")
 - 🐛 Fixed STAB alert icon appearing in damage formulas
@@ -426,18 +411,13 @@ This extension is released under the **MIT License**, which allows you to freely
 - ✨ Popup UI with settings
 - ✨ Roll history tracking
 
-### Version 1.2 (Planned)
-- 🎯 Advantage/disadvantage support
-- 🎯 Spell save DC calculations
-
 
 ## Acknowledgments
 
 Special thanks to:
 
-- **[Auroratide](https://github.com/Auroratide)** — Created the amazing [Pokemon 5e](https://poke5e.app/) ruleset and SvelteKit app
+- **[Auroratide](https://github.com/Auroratide)** — Created the amazing [Pokemon 5e](https://poke5e.app/)
 - **[Roll20](https://roll20.net/)** — Excellent platform for TTRPG campaigns
-- **[Chrome Extensions Docs](https://developer.chrome.com/docs/extensions/)** — Comprehensive API documentation
 - **[irfansusanto20](https://www.flaticon.com/authors/irfansusanto20)** — D20 icon design
 - **[Freepik](https://www.flaticon.com/authors/freepik)** — Additional icon assets
 

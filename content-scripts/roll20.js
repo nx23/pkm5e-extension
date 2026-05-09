@@ -63,11 +63,35 @@ const Roll20Integration = (() => {
       ? (typeof characterName === 'object' ? characterName.character : characterName)
       : null;
 
-    const rollLabel = charDisplay
-      ? `${charDisplay} | ${label || `${stat} ${rollType}`}`
-      : (label || `${stat} ${rollType}`);
+    let diceFormula = '1d20';
+    if (rollData.advantage) {
+      diceFormula = '2d20kh1'; // Roll 2d20, keep highest 1
+    } else if (rollData.disadvantage) {
+      diceFormula = '2d20kl1'; // Roll 2d20, keep lowest 1
+    }
 
-    return `1d20${modifierStr} [${rollLabel}]`;
+    // Add ADV or DIS tag immediately before the move/roll name
+    // If the label already contains " | " (character name embedded by EXECUTE_ATTACK),
+    // insert the tag after the first separator so the result is "CharName | ADV MoveName | Attack"
+    // instead of "ADV CharName | MoveName | Attack".
+    const advantageTag = rollData.advantage ? 'ADV ' : (rollData.disadvantage ? 'DIS ' : '');
+    let labelWithTag;
+    if (!label) {
+      labelWithTag = `${advantageTag}${stat} ${rollType}`;
+    } else if (advantageTag) {
+      const pipeIndex = label.indexOf(' | ');
+      labelWithTag = pipeIndex !== -1
+        ? label.slice(0, pipeIndex + 3) + advantageTag + label.slice(pipeIndex + 3)
+        : `${advantageTag}${label}`;
+    } else {
+      labelWithTag = label;
+    }
+    
+    const rollLabel = charDisplay
+      ? `${charDisplay} | ${labelWithTag}`
+      : labelWithTag;
+
+    return `${diceFormula}${modifierStr} [${rollLabel}]`;
   }
 
   /**
@@ -105,13 +129,12 @@ const Roll20Integration = (() => {
       chatInput.value = command;
       log('✓ Value set to:', chatInput.value);
 
-      // Trigger input event (for reactive frameworks)
+      // Dispatch input/change events so Roll20's jQuery listeners (attached to parent
+      // elements) detect the new value and enable the send button.
       chatInput.dispatchEvent(new Event('input', { bubbles: true }));
       chatInput.dispatchEvent(new Event('change', { bubbles: true }));
       log('✓ Events dispatched');
 
-      // Optional: Auto-submit if user enables it
-      // Uncomment to auto-send:
       const sendButton = document.querySelector('#chatSendBtn');
       if (sendButton) {
         sendButton.click();
@@ -176,6 +199,134 @@ const Roll20Integration = (() => {
   }
 
   /**
+   * Double the damage dice formula for critical hits
+   * @param {string} damageDice - Original damage formula (e.g., "1d6", "2d8+3")
+   * @returns {string} Doubled formula (e.g., "2d6", "4d8+3")
+   */
+  function doubleDamageForCritical(damageDice) {
+    // Match pattern: "XdY" or "XdY+Z" or "XdY-Z"
+    const match = damageDice.match(/^(\d+)d(\d+)(.*?)$/);
+    if (!match) return damageDice; // Return unchanged if pattern doesn't match
+
+    const [, numDice, diceType, modifier] = match;
+    const doubled = parseInt(numDice) * 2;
+    const result = `${doubled}d${diceType}${modifier}`;
+    
+    log(`✓ Doubled damage: ${damageDice} → ${result}`);
+    return result;
+  }
+
+  /**
+   * Observe the chat DOM for the attack roll result, then immediately roll damage.
+   *
+   * A MutationObserver is used instead of a fixed setTimeout because Roll20's
+   * render time is unpredictable. The observer fires the moment the attack
+   * message appears, checks for a natural 20, and rolls the correct damage.
+   *
+   * Falls back to rolling without critical doubling if no message appears
+   * within 5 seconds.
+   *
+   * @param {Object} opts
+   * @param {string} opts.prefix      - "CharName | " or empty string
+   * @param {string} opts.moveName    - Name of the move (e.g. "Bubble")
+   * @param {string} opts.damageDice  - Base damage formula (e.g. "2d6+4")
+   */
+  function waitForAttackMessageThenRollDamage({ prefix, moveName, damageDice }) {
+    const chatContainer = document.querySelector('#textchat') ||
+                          document.querySelector('#chat') ||
+                          document.querySelector('.chat-container');
+
+    if (!chatContainer) {
+      log('⚠️ Chat container not found for observer, falling back to timeout');
+      setTimeout(() => rollDamage({ prefix, moveName, damageDice, isCritical: false }), 800);
+      return;
+    }
+
+    // Safety: give up after 5 seconds
+    const giveUpTimer = setTimeout(() => {
+      observer.disconnect();
+      log('⚠️ Timed out waiting for attack message, rolling damage without critical check');
+      rollDamage({ prefix, moveName, damageDice, isCritical: false });
+    }, 5000);
+
+    const observer = new MutationObserver(() => {
+      // Look for a new .message.rollresult that contains a d20 formula (the attack)
+      const messages = document.querySelectorAll('.message.rollresult');
+      if (messages.length === 0) return;
+
+      const lastMsg = messages[messages.length - 1];
+      const formulaEl = lastMsg.querySelector('.formula');
+      const formulaText = formulaEl ? formulaEl.textContent : '';
+
+      // Only react to a d20 roll (the attack), not any other pending message
+      if (!formulaText.includes('d20')) return;
+
+      observer.disconnect();
+      clearTimeout(giveUpTimer);
+
+      log(`Attack message found: "${formulaText}"`);
+
+      // Now check for critical on this exact message
+      const isCritical = checkMessageForCritical(lastMsg);
+      log(`Critical hit check result: ${isCritical}`);
+
+      rollDamage({ prefix, moveName, damageDice, isCritical });
+    });
+
+    observer.observe(chatContainer, { childList: true, subtree: true });
+    log('Waiting for attack message to appear in DOM...');
+  }
+
+  /**
+   * Check a specific message element for a natural 20 (critical)
+   * @param {HTMLElement} messageEl
+   * @returns {boolean}
+   */
+  function checkMessageForCritical(messageEl) {
+    const diceRolls = messageEl.querySelectorAll('.diceroll.d20');
+    log(`Found ${diceRolls.length} d20 diceroll elements`);
+
+    for (const roll of diceRolls) {
+      const rollText = roll.textContent.trim();
+      const classes = roll.className;
+      log(`  d20 diceroll: text="${rollText}", classes="${classes}"`);
+
+      if (roll.classList.contains('critsuccess') || rollText === '20') {
+        log('✓✓✓ CRITICAL HIT DETECTED ✓✓✓');
+        return true;
+      }
+    }
+
+    log('❌ No critical hit detected');
+    return false;
+  }
+
+  /**
+   * Roll damage (used after critical check)
+   * @param {Object} opts - { prefix, moveName, damageDice, isCritical }
+   */
+  function rollDamage({ prefix, moveName, damageDice, isCritical }) {
+    const chatInput = findChatInput();
+    if (!chatInput) return;
+
+    const finalDamageDice = isCritical ? doubleDamageForCritical(damageDice) : damageDice;
+    const criticalLabel = isCritical ? ' CRITICAL' : '';
+    const damageLabel = `${prefix}${moveName} | Damage (${finalDamageDice})${criticalLabel}`;
+    const command = `/roll ${finalDamageDice} [${damageLabel}]`;
+
+    log(`Rolling damage: ${command}`);
+    chatInput.value = command;
+    chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+    chatInput.dispatchEvent(new Event('change', { bubbles: true }));
+    const sendButton = document.querySelector('#chatSendBtn');
+    if (sendButton) sendButton.click();
+
+    setTimeout(() => Roll20Integration.markExtensionRoll(), 50);
+    setTimeout(() => Roll20Integration.markExtensionRoll(), 200);
+    log('✓ Damage roll injected:', command);
+  }
+
+  /**
    * Message listener for roll requests
    */
   function setupMessageListener() {
@@ -204,7 +355,7 @@ const Roll20Integration = (() => {
       if (request.type === 'EXECUTE_ATTACK') {
         log('Processing EXECUTE_ATTACK request...');
         try {
-          const { moveName, characterName, toHit, damageDice } = request.data;
+          const { moveName, characterName, toHit, damageDice, advantage, disadvantage } = request.data;
           const charDisplay = characterName
             ? (typeof characterName === 'object' ? characterName.character : characterName)
             : null;
@@ -214,33 +365,22 @@ const Roll20Integration = (() => {
 
           // Roll 1: attack hit roll
           if (toHit !== null && toHit !== undefined) {
-            const hitMod = toHit >= 0 ? `+${toHit}` : `${toHit}`;
             success = injectRollIntoChat({
               stat: moveName,
               rollType: 'attack',
               modifier: toHit,
               label: `${prefix}${moveName} | Attack`,
-              characterName: null, // already embedded in label
+              characterName: null,
+              advantage,
+              disadvantage,
             });
           }
 
-          // Roll 2: damage roll (sent after a short delay so they appear in order)
+          // Roll 2: damage roll — wait for the attack message to appear in the DOM
           if (damageDice) {
-            setTimeout(() => {
-              const chatInput = findChatInput();
-              if (!chatInput) return;
-              const damageLabel = `${prefix}${moveName} | Damage (${damageDice})`;
-              const command = `/roll ${damageDice} [${damageLabel}]`;
-              chatInput.value = command;
-              chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-              chatInput.dispatchEvent(new Event('change', { bubbles: true }));
-              const sendButton = document.querySelector('#chatSendBtn');
-              if (sendButton) sendButton.click();
-              // Mark the damage roll for styling
-              setTimeout(() => Roll20Integration.markExtensionRoll(), 50);
-              setTimeout(() => Roll20Integration.markExtensionRoll(), 200);
-              log('✓ Damage roll injected:', command);
-            }, 400);
+            waitForAttackMessageThenRollDamage({
+              prefix, moveName, damageDice,
+            });
           }
 
           sendResponse({ success });
@@ -281,9 +421,10 @@ const Roll20Integration = (() => {
         border-radius: 3px !important;
       }
 
-      /* Player name */
+      /* Keep player name visible */
       div.message.poke5e-roll span.by {
         font-weight: 700 !important;
+        display: inline !important;
       }
 
       /* Always hide "rolling 1d20+4 [label]" text */
@@ -294,6 +435,47 @@ const Roll20Integration = (() => {
         display: none !important;
       }
 
+      /* Character name - shown as subtitle */
+      div.message.poke5e-roll div.poke5e-char-header {
+        display: block !important;
+        font-weight: 600 !important;
+        font-size: 1em !important;
+        color: #666 !important;
+        margin: 6px 0 8px 0 !important;
+        padding: 0 !important;
+        border: none !important;
+      }
+
+      /* Roll label (type of roll) - centered and bold */
+      span.poke5e-label {
+        display: block !important;
+        width: 100% !important;
+        font-weight: 600 !important;
+        font-size: 1em !important;
+        color: #666 !important;
+        margin-bottom: 3px !important;
+        text-align: center !important;
+        padding: 4px 0 !important;
+      }
+
+      /* Formatted formula row - dice and modifiers */
+      div.message.poke5e-roll div.formattedformula {
+        display: flex !important;
+        align-items: center !important;
+        text-align: center !important;
+        justify-content: center !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+        background: #ffffff !important;
+        border: 1px solid #e0e0e0 !important;
+        border-radius: 3px !important;
+        padding: 8px 10px !important;
+        margin: 6px 0 !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        font-size: 1.2em !important;
+      }
+
       /* DEFAULT: total as full-width centered gray box */
       div.message.poke5e-roll div.rolled {
         display: block !important;
@@ -301,32 +483,16 @@ const Roll20Integration = (() => {
         background: #e8e8e8 !important;
         border: 1px solid #c8c8c8 !important;
         border-radius: 3px !important;
-        padding: 5px 0 !important;
-        font-size: 1.2em !important;
+        padding: 4px 0 !important;
+        font-size: 1.6em !important;
         font-weight: 700 !important;
         color: #333 !important;
-        margin: 3px 0 !important;
+        margin: 6px 0 0 0 !important;
         width: 100% !important;
         box-sizing: border-box !important;
       }
 
-      div.message.poke5e-roll div.formattedformula {
-        display: flex !important;
-        align-items: center !important;
-        text-align: center !important;
-        justify-content: center !important;
-        flex-wrap: wrap !important;
-        gap: 4px !important;
-        background: #f5f5f5 !important;
-        border: 1px solid #ddd !important;
-        border-radius: 3px !important;
-        padding: 4px 10px !important;
-        margin: 2px 0 !important;
-        width: 100% !important;
-        box-sizing: border-box !important;
-      }
-
-      /* Crit success/fail colors on dice */
+      /* Natural 20 = green, natural 1 = red */
       div.message.poke5e-roll div.diceroll.critsuccess { color: #2e7d32 !important; font-weight: 900 !important; }
       div.message.poke5e-roll div.diceroll.critfail    { color: #b71c1c !important; font-weight: 900 !important; }
     `;
@@ -336,15 +502,17 @@ const Roll20Integration = (() => {
   }
 
   /**
-   * Setup observer for new roll messages
-   * Automatically style rolls from the extension
+   * Observe the chat for new roll messages and apply extension styling.
+   * Roll20 renders messages asynchronously, so a MutationObserver is used
+   * instead of querying the DOM at a fixed point in time.
    */
   function setupRollObserver() {
     log('Setting up roll message observer...');
-    
-    const chatContainer = document.querySelector('#chat') || 
-                         document.querySelector('.chat-container') ||
-                         document.querySelector('[class*="chat"]');
+
+    // #chat is the Roll20 chat log container
+    const chatContainer = document.querySelector('#chat') ||
+                          document.querySelector('.chat-container') ||
+                          document.querySelector('[class*="chat"]');
     
     if (!chatContainer) {
       log('⚠️ Chat container not found for observer');
@@ -368,8 +536,9 @@ const Roll20Integration = (() => {
               if (messageEl && messageEl.classList.contains('rollresult')) {
                 const formula = messageEl.querySelector('.formula');
                 const formulaText = formula ? formula.textContent : '';
-                // Detect any roll from this extension by looking for the " | " separator
-                // pattern used in all our labels: "CharName | Label" or "Label"
+                // All extension roll labels follow the pattern "CharName | Label",
+                // so the " | " separator is a reliable fingerprint. The keyword
+                // list catches stat/skill rolls that may not include a character name.
                 const isPoke5eRoll = formulaText.includes(' | ') || [
                   'STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA',
                   'check', 'save', 'skill', 'Attack', 'Damage',
@@ -403,8 +572,14 @@ const Roll20Integration = (() => {
   }
 
   /**
-   * Extract label from formula and inject it into formattedformula
-   * @param {HTMLElement} messageEl
+   * Parse the roll label from the formula text and inject a character header
+   * and a roll-type label into the message element for display.
+   *
+   * Labels follow the format: "[CharName | Roll Label]"
+   * e.g. "[Bubble | Attack]" or "[Bubble | Damage (2d6+4)]"
+   *
+   * @param {HTMLElement} messageEl - The .message.rollresult element to format
+   * @param {string} [characterName] - Optional override for the character name
    */
   function formatRollMessage(messageEl, characterName) {
     if (!messageEl || messageEl.dataset.poke5eFormatted) return;
@@ -412,23 +587,42 @@ const Roll20Integration = (() => {
 
     const formulaEl = messageEl.querySelector('.formula');
     const formattedEl = messageEl.querySelector('.formattedformula');
+    
     if (!formulaEl || !formattedEl) return;
 
-    // Inject character name header box if provided
-    const nameData = characterName || (typeof characterName === 'object' ? characterName : null);
-    const charDisplay = nameData
-      ? (nameData.character || null)
-      : null;
+    // Extract label and split by " | " separator
+    const labelMatch = formulaEl.textContent.match(/\[([^\]]+)\]/);
+    if (!labelMatch) return;
+    
+    const fullLabel = labelMatch[1];
+    const parts = fullLabel.split(' | ');
+    const charName = parts.length > 1 ? parts[0] : null;
+    const rollLabel = parts.length > 1 ? parts.slice(1).join(' | ') : fullLabel;
 
-    if (charDisplay) {
+    // Determine name to display
+    const nameDisplay = characterName 
+      ? (typeof characterName === 'object' ? characterName.character : characterName)
+      : charName;
+
+    // 1. Insert character name header right before formattedEl (as a sibling)
+    if (nameDisplay && !messageEl.querySelector('.poke5e-char-header')) {
       const header = document.createElement('div');
       header.className = 'poke5e-char-header';
-      header.textContent = charDisplay;
-      messageEl.insertBefore(header, messageEl.firstChild);
-      log(`✓ Injected character header: ${charDisplay}`);
+      header.textContent = nameDisplay;
+      // Insert right before formattedEl
+      formattedEl.parentNode.insertBefore(header, formattedEl);
+      log(`✓ Injected character header: ${nameDisplay}`);
     }
 
-    // Wrap bare text nodes (e.g. "+6") in spans so CSS can target them
+    // 2. Create roll label (inside formattedformula at the start)
+    if (rollLabel && !formattedEl.querySelector('.poke5e-label')) {
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'poke5e-label';
+      labelSpan.textContent = rollLabel;
+      formattedEl.insertBefore(labelSpan, formattedEl.firstChild);
+    }
+
+    // 3. Wrap bare text nodes (modifiers like "+6")
     Array.from(formattedEl.childNodes).forEach(node => {
       if (node.nodeType === 3 && node.textContent.trim()) {
         const span = document.createElement('span');
@@ -438,21 +632,13 @@ const Roll20Integration = (() => {
       }
     });
 
-    // Inject label [WIS save] at the start of the breakdown row
-    const labelMatch = formulaEl.textContent.match(/\[([^\]]+)\]/);
-    if (labelMatch) {
-      const labelSpan = document.createElement('span');
-      labelSpan.className = 'poke5e-label';
-      labelSpan.textContent = labelMatch[1];
-      formattedEl.insertBefore(labelSpan, formattedEl.firstChild);
-    }
-
     log('✓ Formatted roll message');
   }
 
   /**
-   * Mark a roll message as coming from the extension
-   * Call this when you inject a roll to add the poke5e-roll class
+   * Apply extension styling to the most recent roll message.
+   * Called after injecting a roll command, with retries to account for
+   * Roll20's async rendering.
    */
   function markExtensionRoll() {
     log('Attempting to mark extension roll...');

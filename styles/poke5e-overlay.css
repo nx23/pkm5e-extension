@@ -44,23 +44,22 @@
   position: relative;
 }
 
-.poke5e-hover::before {
-  content: '';
-  position: absolute;
-  left: -22px;
-  top: 50%;
-  transform: translateY(-50%);
+/* Floating dice icon — injected as a real DOM element on <body> so it is
+   never clipped by overflow:hidden ancestors on the site. Managed by JS. */
+#poke5e-dice-icon {
+  position: fixed;
   width: 24px;
   height: 24px;
+  pointer-events: none;  /* never intercepts clicks */
+  z-index: 2147483647;   /* maximum z-index, above everything */
   opacity: 0;
-
+  transition: opacity 0.15s ease;
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
-  /* background-image set by JS via chrome.runtime.getURL */
 }
 
-.poke5e-hover:hover::before {
+#poke5e-dice-icon.visible {
   opacity: 1;
 }
 
