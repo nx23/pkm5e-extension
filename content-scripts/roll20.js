@@ -690,7 +690,7 @@ const Roll20Integration = (() => {
         injectRollIntoChat(roll.data);
 
       } else if (roll.type === 'ATTACK_REQUEST') {
-        const { moveName, characterName, toHit, damageDice } = roll.data;
+        const { moveName, characterName, toHit, damageDice, advantage, disadvantage } = roll.data;
         const charDisplay = characterName
           ? (typeof characterName === 'object' ? characterName.character : characterName)
           : null;
@@ -703,23 +703,12 @@ const Roll20Integration = (() => {
             modifier: toHit,
             label: `${prefix}${moveName} | Attack`,
             characterName: null,
+            advantage,
+            disadvantage,
           });
         }
         if (damageDice) {
-          setTimeout(() => {
-            const chatInput = findChatInput();
-            if (!chatInput) return;
-            const damageLabel = `${prefix}${moveName} | Damage (${damageDice})`;
-            const command = `/roll ${damageDice} [${damageLabel}]`;
-            chatInput.value = command;
-            chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-            chatInput.dispatchEvent(new Event('change', { bubbles: true }));
-            const sendButton = document.querySelector('#chatSendBtn');
-            if (sendButton) sendButton.click();
-            setTimeout(() => Roll20Integration.markExtensionRoll(), 50);
-            setTimeout(() => Roll20Integration.markExtensionRoll(), 200);
-            log('✓ Damage roll injected via storage:', command);
-          }, 400);
+          waitForAttackMessageThenRollDamage({ prefix, moveName, damageDice });
         }
       }
     });
