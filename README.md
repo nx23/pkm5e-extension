@@ -5,6 +5,7 @@ If you enjoy the extension and want to support its development:
 <a href='https://ko-fi.com/N4N71Z6D5V' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
 
 [Chrome WebStore - Poke5eRoll20](https://chromewebstore.google.com/detail/alellhfnhemmnlbdaaafegkgohkiioik?utm_source=item-share-cb)
+[Firefox Add-ons - pokemon-5e-roll20](https://addons.mozilla.org/pt-BR/firefox/addon/pokemon-5e-roll20/)
 
 A Web Browser Extension (Manifest V3) that integrates [Pokemon 5e](https://poke5e.app/) character sheets with [Roll20](https://roll20.net/), enabling one-click dice rolling directly from abilities, saves, skills, and attacks.
 
