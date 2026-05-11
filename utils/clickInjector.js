@@ -11,12 +11,19 @@ const ClickInjector = (() => {
    * Create a roll context from the clicked element
    * @param {HTMLElement} element - The element that was clicked
    * @param {string} rollType - Type of roll (save, skill, ability, attack)
+   * @param {MouseEvent} event - The click event (para detectar Shift/Ctrl)
    * @returns {Object} Roll context
    */
-  function createRollContext(element, rollType) {
+  function createRollContext(element, rollType, event) {
     const text = element.innerText.trim();
     let stat = null;
     let modifier = 0;
+
+    // Read modifier state from the click event AND from body classes (set by key listeners
+    // in poke5e.js). The body class is a more reliable source when the browser intercepts
+    // Shift+Click on <a> elements (e.g. "open in new window" behaviour in Chrome).
+    const hasAdvantage    = (event && event.shiftKey) || document.body.classList.contains('poke5e-advantage');
+    const hasDisadvantage = (event && event.ctrlKey)  || document.body.classList.contains('poke5e-disadvantage');
 
     // Determine which ability/stat
     const abilityMatch = text.match(/(STR|DEX|CON|INT|WIS|CHA)/i);
@@ -63,7 +70,9 @@ const ClickInjector = (() => {
       stat: stat,
       modifier: modifier,
       label: text,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      advantage: hasAdvantage,
+      disadvantage: hasDisadvantage
     };
 
     log('Created roll context:', context);
@@ -98,22 +107,54 @@ const ClickInjector = (() => {
    * @param {Object} rollContext - The roll context
    */
   function sendRollRequest(rollContext) {
-    log('Sending ROLL_REQUEST via storage:', rollContext);
-    showNotification('✓ Roll sent to Roll20', 'success');
-    sendViaStorage({
-      type: 'ROLL_REQUEST',
-      data: {
-        rollType: rollContext.rollType,
-        stat: rollContext.stat,
-        modifier: rollContext.modifier,
-        label: rollContext.rollType === 'skill'
-          ? rollContext.stat
-          : `${rollContext.stat} ${rollContext.rollType}`,
-        diceFormula: `1d20+${rollContext.modifier}`,
-        characterName: DataParser.getCharacterName()
-      },
-      _id: Date.now()
-    });
+    try {
+      // Verify extension context
+      if (!chrome.runtime || !chrome.runtime.sendMessage) {
+        showNotification('✗ Extension context not available', 'error');
+        log('Error: Chrome extension context not available');
+        return;
+      }
+      
+      log('Sending ROLL_REQUEST to background:', rollContext);
+      
+      sendViaStorage({
+        type: 'ROLL_REQUEST',
+        data: {
+          rollType: rollContext.rollType,
+          stat: rollContext.stat,
+          modifier: rollContext.modifier,
+          label: rollContext.rollType === 'skill'
+            ? rollContext.stat
+            : `${rollContext.stat} ${rollContext.rollType}`,
+          diceFormula: `1d20+${rollContext.modifier}`,
+          characterName: DataParser.getCharacterName(),
+          sheetData: DataParser.getCompleteSheetData(),
+          advantage: rollContext.advantage,
+          disadvantage: rollContext.disadvantage
+        }
+      }, response => {
+        log('Response received from background:', response);
+        
+        if (chrome.runtime.lastError) {
+          const errorMsg = chrome.runtime.lastError.message;
+          log('❌ Chrome error:', errorMsg);
+          showNotification(`✗ Extension error: ${errorMsg}`, 'error');
+          return;
+        }
+        
+        if (response && response.success) {
+          log('✓ Roll executed successfully');
+          showNotification('✓ Roll sent to Roll20', 'success');
+        } else {
+          const error = response?.error || response?.message || 'Unknown error';
+          log('❌ Roll failed:', error);
+          showNotification(`✗ ${error}`, 'error');
+        }
+      });
+    } catch (error) {
+      log('❌ Exception in sendRollRequest:', error.message);
+      showNotification(`✗ Error: ${error.message}`, 'error');
+    }
   }
 
   /**
@@ -190,7 +231,8 @@ const ClickInjector = (() => {
       addHoverEffect(dt);
       dt.addEventListener('click', (e) => {
         e.stopPropagation();
-        sendRollRequest({ rollType: 'check', stat, modifier });
+        const rollContext = createRollContext(dt, 'check', e);
+        sendRollRequest({ rollType: 'check', stat, modifier, ...rollContext });
       });
       injected++;
       log(`✓ Ability check handler injected: ${stat} (${modifier >= 0 ? '+' : ''}${modifier})`);
@@ -219,7 +261,8 @@ const ClickInjector = (() => {
       addHoverEffect(dt);
       dt.addEventListener('click', (e) => {
         e.stopPropagation();
-        sendRollRequest({ rollType: 'save', stat, modifier });
+        const rollContext = createRollContext(dt, 'save', e);
+        sendRollRequest({ rollType: 'save', stat, modifier, ...rollContext });
       });
       injected++;
       log(`✓ Save handler injected: ${stat} (${modifier >= 0 ? '+' : ''}${modifier})`);
@@ -248,7 +291,8 @@ const ClickInjector = (() => {
       addHoverEffect(dt);
       dt.addEventListener('click', (e) => {
         e.stopPropagation();
-        sendRollRequest({ rollType: 'skill', stat: skill, modifier });
+        const rollContext = createRollContext(dt, 'skill', e);
+        sendRollRequest({ rollType: 'skill', stat: skill, modifier, ...rollContext });
       });
       injected++;
       log(`✓ Skill handler injected: ${skill} (${modifier >= 0 ? '+' : ''}${modifier})`);
@@ -312,16 +356,29 @@ const ClickInjector = (() => {
         e.preventDefault();
         e.stopPropagation();
 
-        showNotification(`⚔ ${moveName} rolled!`, 'success');
+        const rollContext = createRollContext(nameLink, 'attack', e);
+        const characterName = DataParser.getCharacterName();
         sendViaStorage({
           type: 'ATTACK_REQUEST',
           data: {
             moveName,
             characterName: DataParser.getCharacterName(),
             toHit,
-            damageDice
-          },
-          _id: Date.now()
+            damageDice,
+            advantage: rollContext.advantage,
+            disadvantage: rollContext.disadvantage
+          }
+        }, response => {
+          if (chrome.runtime.lastError) {
+            log('❌ Chrome error:', chrome.runtime.lastError.message);
+            showNotification(`✗ ${chrome.runtime.lastError.message}`, 'error');
+            return;
+          }
+          if (response && response.success) {
+            showNotification(`⚔ ${moveName} rolled!`, 'success');
+          } else {
+            showNotification(`✗ ${response?.error || 'Unknown error'}`, 'error');
+          }
         });
       });
 

@@ -5,12 +5,77 @@
 
 log('Content script loaded on poke5e.app');
 
-// Inject dice icon URL into CSS for .poke5e-hover::after
+// Create a single floating dice icon element anchored to <body>.
+// This avoids being clipped by overflow:hidden on any ancestor in the site's UI.
 (function injectDiceIconStyle() {
-  const iconUrl = chrome.runtime.getURL('assets/d20.png');
-  const style = document.createElement('style');
-  style.textContent = `.poke5e-hover::before { background-image: url("${iconUrl}"); }`;
-  document.head.appendChild(style);
+  const d20    = chrome.runtime.getURL('assets/d20.png');
+  const d20Adv = chrome.runtime.getURL('assets/d20-adv.png');
+  const d20Dis = chrome.runtime.getURL('assets/d20-dadv.png');
+
+  // Floating icon element
+  const icon = document.createElement('div');
+  icon.id = 'poke5e-dice-icon';
+  icon.style.backgroundImage = `url("${d20}")`;
+  document.body.appendChild(icon);
+
+  // Update icon image based on advantage/disadvantage state
+  function updateIconImage() {
+    if (document.body.classList.contains('poke5e-advantage')) {
+      icon.style.backgroundImage = `url("${d20Adv}")`;
+    } else if (document.body.classList.contains('poke5e-disadvantage')) {
+      icon.style.backgroundImage = `url("${d20Dis}")`;
+    } else {
+      icon.style.backgroundImage = `url("${d20}")`;
+    }
+  }
+
+  // Show icon next to hovered rollable elements
+  document.addEventListener('mouseover', (e) => {
+    const target = e.target.closest('.poke5e-hover');
+    if (!target) {
+      icon.classList.remove('visible');
+      return;
+    }
+    const rect = target.getBoundingClientRect();
+    icon.style.left = (rect.left - 28) + 'px';
+    icon.style.top  = (rect.top + rect.height / 2 - 12) + 'px';
+    updateIconImage();
+    icon.classList.add('visible');
+  });
+
+  document.addEventListener('mouseout', (e) => {
+    if (!e.target.closest('.poke5e-hover')) {
+      icon.classList.remove('visible');
+    }
+  });
+
+  // Update body classes and icon image on Shift/Ctrl press/release.
+  // updateIconImage() is called AFTER the class change so it reads the correct state.
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Shift') {
+      document.body.classList.add('poke5e-advantage');
+      document.body.classList.remove('poke5e-disadvantage');
+    } else if (e.key === 'Control') {
+      document.body.classList.add('poke5e-disadvantage');
+      document.body.classList.remove('poke5e-advantage');
+    }
+    updateIconImage();
+  });
+
+  document.addEventListener('keyup', (e) => {
+    if (e.key === 'Shift') {
+      document.body.classList.remove('poke5e-advantage');
+    } else if (e.key === 'Control') {
+      document.body.classList.remove('poke5e-disadvantage');
+    }
+    updateIconImage();
+  });
+
+  // Clear both states if the window loses focus (e.g. Alt+Tab while holding a key)
+  window.addEventListener('blur', () => {
+    document.body.classList.remove('poke5e-advantage', 'poke5e-disadvantage');
+    updateIconImage();
+  });
 })();
 
 log('Available modules:', {

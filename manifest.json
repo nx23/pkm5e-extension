@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Pokemon 5e Roll20",
   "description": "Enable integration with Roll20 for Pokemon 5e.",
-  "version": "1.1",
+  "version": "1.2",
   "browser_specific_settings": {
     "gecko": {
       "id": "gbotareli@gmail.com",
@@ -55,7 +55,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["assets/d20.png"],
+      "resources": ["assets/d20.png", "assets/d20-adv.png", "assets/d20-dadv.png"],
       "matches": ["https://poke5e.app/*", "http://poke5e.app/*"]
     }
   ]
