@@ -137,56 +137,49 @@ const Roll20Integration = (() => {
    */
   function injectRollIntoChat(rollData) {
     log('Starting roll injection with data:', rollData);
-    
-    const chatInput = findChatInput();
 
+    if (!rollData || !rollData.stat) {
+      log('⚠️ Invalid roll data:', rollData);
+      showNotification('Invalid roll data', 'error');
+      return false;
+    }
+
+    const chatInput = findChatInput();
     if (!chatInput) {
       log('❌ ERROR: Could not find chat input element');
       showNotification('❌ Could not find Roll20 chat input', 'error');
       return false;
     }
 
-    try {
-      // Validate roll data
-      if (!rollData || !rollData.stat) {
-        log('⚠️ Invalid roll data:', rollData);
-        showNotification('Invalid roll data', 'error');
-        return false;
-      }
+    const { stat, rollType, label, characterName, advantage, disadvantage } = rollData;
+    const mod = rollData.totalModifier ?? rollData.modifier ?? 0;
+    const modStr = mod >= 0 ? `+${mod}` : `${mod}`;
 
-      // Generate the command
-      const formula = generateDiceFormula(rollData);
-      const command = `/roll ${formula}`;
+    let diceFormula;
+    if (advantage)      diceFormula = `2d20kh1${modStr}`;
+    else if (disadvantage) diceFormula = `2d20kl1${modStr}`;
+    else                diceFormula = `1d20${modStr}`;
 
-      log('Generated command:', command);
-      log('Injecting into chat input...');
+    const charDisplay = characterName
+      ? (typeof characterName === 'object' ? characterName.character : characterName)
+      : null;
 
-      // Set the value
-      chatInput.value = command;
-      log('✓ Value set to:', chatInput.value);
+    // Field label: use supplied label (e.g. "Athletics", "STR ability", "DEX save")
+    const fieldLabel = label || `${stat} ${rollType}`;
+    const cardName   = charDisplay ? `${charDisplay} | ${fieldLabel}` : fieldLabel;
 
-      // Dispatch input/change events so Roll20's jQuery listeners (attached to parent
-      // elements) detect the new value and enable the send button.
-      chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-      chatInput.dispatchEvent(new Event('change', { bubbles: true }));
-      log('✓ Events dispatched');
+    const command = `&{template:default} {{name=${cardName}}} {{${fieldLabel}=[[${diceFormula}]]}}`;
 
-      const sendButton = document.querySelector('#chatSendBtn');
-      if (sendButton) {
-        sendButton.click();
-      }
+    chatInput.value = command;
+    chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+    chatInput.dispatchEvent(new Event('change', { bubbles: true }));
 
-      log('✓ Roll injected successfully:', command);
-      showNotification('✓ Roll injected into Roll20 chat', 'success');
-      
-      return true;
+    const sendButton = document.querySelector('#chatSendBtn');
+    if (sendButton) sendButton.click();
 
-    } catch (error) {
-      log('✗ Error injecting roll:', error.message);
-      log('Full error:', error);
-      showNotification(`✗ Error: ${error.message}`, 'error');
-      return false;
-    }
+    log(`✓ Roll card sent: ${command}`);
+    showNotification('✓ Roll sent to chat', 'success');
+    return true;
   }
 
   /**
