@@ -49,6 +49,20 @@ const Roll20Integration = (() => {
   }
 
   /**
+   * Strip Roll20 template metacharacters from a value so it cannot break
+   * out of a {{field=value}} pair or inject inline rolls.
+   * Removes }} (closes field), {{ (opens field), [[ and ]] (inline rolls).
+   */
+  function sanitizeForTemplate(value) {
+    if (value == null) return value;
+    return String(value)
+      .replace(/\{\{/g, '(')
+      .replace(/\}\}/g, ')')
+      .replace(/\[\[/g, '(')
+      .replace(/\]\]/g, ')');
+  }
+
+  /**
    * Send a Save DC message as a formatted Roll20 template card (no /roll)
    * @param {Object} opts
    * @returns {boolean} Success status
@@ -59,14 +73,15 @@ const Roll20Integration = (() => {
       : null;
 
     // Embed character name directly in the template name field to avoid /as encoding issues
-    const cardName = charDisplay ? `${charDisplay} | ${moveName}` : moveName;
-    let message = `&{template:default} {{name=${cardName}}} {{${saveType} Save DC=${saveDC}}}`;
+    const cardName = sanitizeForTemplate(charDisplay ? `${charDisplay} | ${moveName}` : moveName);
+    const safeSaveType = sanitizeForTemplate(saveType);
+    let message = `&{template:default} {{name=${cardName}}} {{${safeSaveType} Save DC=${saveDC}}}`;
     if (damageDice) message += ` {{Damage (${damageDice})=[[${damageDice}]]}}`;
-    if (moveType) message += ` {{Type=${moveType}}}`;
-    if (moveTime) message += ` {{Time=${moveTime}}}`;
-    if (moveRange) message += ` {{Range=${moveRange}}}`;
-    if (moveDuration) message += ` {{Duration=${moveDuration}}}`;
-    if (moveDescription) message += ` {{Effect=${moveDescription}}}`;
+    if (moveType) message += ` {{Type=${sanitizeForTemplate(moveType)}}}`;
+    if (moveTime) message += ` {{Time=${sanitizeForTemplate(moveTime)}}}`;
+    if (moveRange) message += ` {{Range=${sanitizeForTemplate(moveRange)}}}`;
+    if (moveDuration) message += ` {{Duration=${sanitizeForTemplate(moveDuration)}}}`;
+    if (moveDescription) message += ` {{Effect=${sanitizeForTemplate(moveDescription)}}}`;
 
     const chatInput = findChatInput();
     if (!chatInput) {
@@ -124,7 +139,7 @@ const Roll20Integration = (() => {
     const baseLabel  = label || `${stat} ${rollType}`;
     const advTag     = advantage ? ' (ADV)' : disadvantage ? ' (DIS)' : '';
     const fieldLabel = `${baseLabel}${advTag}`;
-    const cardName   = charDisplay ? `${charDisplay} | ${fieldLabel}` : fieldLabel;
+    const cardName   = sanitizeForTemplate(charDisplay ? `${charDisplay} | ${fieldLabel}` : fieldLabel);
 
     const command = `&{template:default} {{name=${cardName}}} {{${fieldLabel}=[[${diceFormula}]]}}`;
 
@@ -242,7 +257,7 @@ const Roll20Integration = (() => {
     const charDisplay = characterName
       ? (typeof characterName === 'object' ? characterName.character : characterName)
       : null;
-    const cardName = charDisplay ? `${charDisplay} | ${moveName}` : moveName;
+    const cardName = sanitizeForTemplate(charDisplay ? `${charDisplay} | ${moveName}` : moveName);
 
     const modifierStr = toHit >= 0 ? `+${toHit}` : `${toHit}`;
     let diceFormula = `1d20${modifierStr}`;
@@ -257,11 +272,11 @@ const Roll20Integration = (() => {
 
     let command = `&{template:default} {{name=${cardName}}} {{${fieldLabel}=[[${diceFormula}]]}}`;
     if (damageDice) command += ` {{Damage (${damageDice})=[[${damageDice}]]}}`;
-    if (moveType) command += ` {{Type=${moveType}}}`;
-    if (moveTime) command += ` {{Time=${moveTime}}}`;
-    if (moveRange) command += ` {{Range=${moveRange}}}`;
-    if (moveDuration) command += ` {{Duration=${moveDuration}}}`;
-    if (moveDescription) command += ` {{Effect=${moveDescription}}}`;
+    if (moveType) command += ` {{Type=${sanitizeForTemplate(moveType)}}}`;
+    if (moveTime) command += ` {{Time=${sanitizeForTemplate(moveTime)}}}`;
+    if (moveRange) command += ` {{Range=${sanitizeForTemplate(moveRange)}}}`;
+    if (moveDuration) command += ` {{Duration=${sanitizeForTemplate(moveDuration)}}}`;
+    if (moveDescription) command += ` {{Effect=${sanitizeForTemplate(moveDescription)}}}`;
 
     chatInput.value = command;
     chatInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -291,14 +306,14 @@ const Roll20Integration = (() => {
     const charDisplay = characterName
       ? (typeof characterName === 'object' ? characterName.character : characterName)
       : null;
-    const cardName = charDisplay ? `${charDisplay} | ${moveName}` : moveName;
+    const cardName = sanitizeForTemplate(charDisplay ? `${charDisplay} | ${moveName}` : moveName);
 
     let command = `&{template:default} {{name=${cardName}}}`;
-    if (moveType) command += ` {{Type=${moveType}}}`;
-    if (moveTime) command += ` {{Time=${moveTime}}}`;
-    if (moveRange) command += ` {{Range=${moveRange}}}`;
-    if (moveDuration) command += ` {{Duration=${moveDuration}}}`;
-    if (moveDescription) command += ` {{Effect=${moveDescription}}}`;
+    if (moveType) command += ` {{Type=${sanitizeForTemplate(moveType)}}}`;
+    if (moveTime) command += ` {{Time=${sanitizeForTemplate(moveTime)}}}`;
+    if (moveRange) command += ` {{Range=${sanitizeForTemplate(moveRange)}}}`;
+    if (moveDuration) command += ` {{Duration=${sanitizeForTemplate(moveDuration)}}}`;
+    if (moveDescription) command += ` {{Effect=${sanitizeForTemplate(moveDescription)}}}`;
 
     chatInput.value = command;
     chatInput.dispatchEvent(new Event('input', { bubbles: true }));
