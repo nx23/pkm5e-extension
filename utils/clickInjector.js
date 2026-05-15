@@ -94,40 +94,68 @@ const ClickInjector = (() => {
       
       log('Sending ROLL_REQUEST to background:', rollContext);
       
-      chrome.runtime.sendMessage({
-        type: 'ROLL_REQUEST',
-        data: {
-          rollType: rollContext.rollType,
-          stat: rollContext.stat,
-          modifier: rollContext.modifier,
-          label: rollContext.rollType === 'skill'
-            ? rollContext.stat
-            : `${rollContext.stat} ${rollContext.rollType}`,
-          diceFormula: `1d20+${rollContext.modifier}`,
-          characterName: DataParser.getCharacterName(),
-          sheetData: DataParser.getCompleteSheetData(),
-          advantage: rollContext.advantage,
-          disadvantage: rollContext.disadvantage
+      // Retrieve bonuses from storage
+      chrome.runtime.sendMessage(
+        { type: 'GET_BONUSES' },
+        (bonusResponse) => {
+          if (chrome.runtime.lastError) {
+            log('⚠ Could not retrieve bonuses:', chrome.runtime.lastError);
+            bonusResponse = { attackBonus: 0, saveDcBonus: 0 };
+          }
+          
+          const attackBonus = bonusResponse?.attackBonus || 0;
+          const saveDcBonus = bonusResponse?.saveDcBonus || 0;
+          
+          // Determine which bonus to apply
+          let extraBonus = 0;
+          if (rollContext.rollType === 'attack') {
+            extraBonus = attackBonus;
+            log(`✓ Applying attack bonus: +${attackBonus}`);
+          } else if (rollContext.rollType === 'save') {
+            extraBonus = saveDcBonus;
+            log(`✓ Applying save DC bonus: +${saveDcBonus}`);
+          }
+          
+          const totalModifier = rollContext.modifier + extraBonus;
+          
+          chrome.runtime.sendMessage({
+            type: 'ROLL_REQUEST',
+            data: {
+              rollType: rollContext.rollType,
+              stat: rollContext.stat,
+              modifier: rollContext.modifier,
+              extraBonus: extraBonus,
+              totalModifier: totalModifier,
+              label: rollContext.rollType === 'skill'
+                ? rollContext.stat
+                : `${rollContext.stat} ${rollContext.rollType}`,
+              diceFormula: `1d20+${totalModifier}`,
+              characterName: DataParser.getCharacterName(),
+              sheetData: DataParser.getCompleteSheetData(),
+              advantage: rollContext.advantage,
+              disadvantage: rollContext.disadvantage
+            }
+          }, response => {
+            log('Response received from background:', response);
+            
+            if (chrome.runtime.lastError) {
+              const errorMsg = chrome.runtime.lastError.message;
+              log('❌ Chrome error:', errorMsg);
+              showNotification(`✗ Extension error: ${errorMsg}`, 'error');
+              return;
+            }
+            
+            if (response && response.success) {
+              log('✓ Roll executed successfully');
+              showNotification('✓ Roll sent to Roll20', 'success');
+            } else {
+              const error = response?.error || response?.message || 'Unknown error';
+              log('❌ Roll failed:', error);
+              showNotification(`✗ ${error}`, 'error');
+            }
+          });
         }
-      }, response => {
-        log('Response received from background:', response);
-        
-        if (chrome.runtime.lastError) {
-          const errorMsg = chrome.runtime.lastError.message;
-          log('❌ Chrome error:', errorMsg);
-          showNotification(`✗ Extension error: ${errorMsg}`, 'error');
-          return;
-        }
-        
-        if (response && response.success) {
-          log('✓ Roll executed successfully');
-          showNotification('✓ Roll sent to Roll20', 'success');
-        } else {
-          const error = response?.error || response?.message || 'Unknown error';
-          log('❌ Roll failed:', error);
-          showNotification(`✗ ${error}`, 'error');
-        }
-      });
+      );
     } catch (error) {
       log('❌ Exception in sendRollRequest:', error.message);
       showNotification(`✗ Error: ${error.message}`, 'error');
@@ -286,14 +314,19 @@ const ClickInjector = (() => {
    *     <div><dt>Attack</dt><dd>+7 to Hit</dd></div>
    *     <div><dt>Damage</dt><dd>1d6</dd></div>
    *   </dl>
+   * 
+   * Or for SAVE moves:
+   *     <div><dt>DEX Save</dt><dd>DC 16</dd></div>
+   *     <div><dt>Damage</dt><dd>2d8+8</dd></div>
    */
   function injectAttackHandlers() {
     let injected = 0;
 
-    // Each move block has a .move-stats-info dl with Attack and/or Damage divs
+    // Each move block has a .move-stats-info dl with Attack/Save and/or Damage divs
     document.querySelectorAll('dl.move-stats-info').forEach(statsDl => {
-      // Find the to-hit value: div containing <dt>Attack</dt>
       let toHit = null;
+      let saveDC = null;
+      let saveType = null;
       let damageDice = null;
 
       statsDl.querySelectorAll('div').forEach(div => {
@@ -301,23 +334,33 @@ const ClickInjector = (() => {
         const dd = div.querySelector('dd');
         if (!dt || !dd) return;
         const label = dt.innerText.trim().toLowerCase();
+        
+        // Check for Attack
         if (label === 'attack') {
-          // "+7 to Hit" → extract the number
           const match = dd.innerText.match(/([+-]?\d+)/);
           if (match) toHit = parseInt(match[1]);
-        } else if (label === 'damage' || label === 'healing') {
-          // "1d6" or "2d6 + 3", strip any non-dice characters (e.g. STAB alert icon)
+        } 
+        // Check for Save (e.g. "DEX Save", "STR Save")
+        else if (label.includes('save')) {
+          const saveMatch = label.match(/(str|dex|con|int|wis|cha)/i);
+          if (saveMatch) {
+            saveType = saveMatch[1].toUpperCase();
+            const dcMatch = dd.innerText.match(/DC\s*(\d+)/i);
+            if (dcMatch) saveDC = parseInt(dcMatch[1]);
+          }
+        }
+        // Damage or healing
+        else if (label === 'damage' || label === 'healing') {
           damageDice = dd.innerText.trim()
             .replace(/\s+/g, '')
             .replace(/[^0-9d+\-*\/().]/gi, '');
         }
       });
 
-      // No attack stat = move without a hit roll (e.g. pure save moves), skip
-      if (toHit === null && damageDice === null) return;
+      // No attack/save stat = move without a roll, skip
+      if (toHit === null && saveDC === null) return;
 
-      // Find the move name link — it's in the .hrow above this dl
-      // The dl is a sibling of .move-stats (its parent div), which is inside .vstack
+      // Find the move name link
       const moveContainer = statsDl.closest('.vstack');
       if (!moveContainer) return;
       const nameLink = moveContainer.querySelector('.flex-span.bold a, .flex-span a');
@@ -335,35 +378,100 @@ const ClickInjector = (() => {
 
         const rollContext = createRollContext(nameLink, 'attack', e);
         const characterName = DataParser.getCharacterName();
-        chrome.runtime.sendMessage({
-          type: 'ATTACK_REQUEST',
-          data: {
-            moveName,
-            characterName,
-            toHit,
-            damageDice,
-            advantage: rollContext.advantage,
-            disadvantage: rollContext.disadvantage
+        
+        // Retrieve bonuses from storage
+        chrome.runtime.sendMessage(
+          { type: 'GET_BONUSES' },
+          (bonusResponse) => {
+            if (chrome.runtime.lastError) {
+              log('⚠ Could not retrieve bonuses:', chrome.runtime.lastError);
+              bonusResponse = { attackBonus: 0, saveDcBonus: 0 };
+            }
+            
+            const attackBonus = bonusResponse?.attackBonus || 0;
+            const saveDcBonus = bonusResponse?.saveDcBonus || 0;
+            
+            // Handle SAVE moves
+            if (saveDC !== null) {
+              const totalDC = saveDC + saveDcBonus;
+              if (saveDcBonus !== 0) {
+                log(`✓ Adding save DC bonus: ${saveDC} + ${saveDcBonus} = ${totalDC}`);
+              }
+              
+              chrome.runtime.sendMessage({
+                type: 'ATTACK_REQUEST',
+                data: {
+                  moveName,
+                  characterName,
+                  isSaveMove: true,
+                  saveType: saveType,
+                  saveDC: totalDC,
+                  baseSaveDC: saveDC,
+                  saveDcBonus: saveDcBonus,
+                  damageDice,
+                  advantage: rollContext.advantage,
+                  disadvantage: rollContext.disadvantage
+                }
+              }, response => {
+                if (chrome.runtime.lastError) {
+                  log('❌ Chrome error:', chrome.runtime.lastError.message);
+                  showNotification(`✗ ${chrome.runtime.lastError.message}`, 'error');
+                  return;
+                }
+                if (response && response.success) {
+                  showNotification(`💨 ${moveName} rolled!`, 'success');
+                } else {
+                  showNotification(`✗ ${response?.error || 'Unknown error'}`, 'error');
+                }
+              });
+            }
+            // Handle ATTACK moves
+            else if (toHit !== null) {
+              const totalToHit = toHit + attackBonus;
+              
+              if (attackBonus !== 0) {
+                log(`✓ Adding attack bonus: ${toHit} + ${attackBonus} = ${totalToHit}`);
+              }
+              
+              chrome.runtime.sendMessage({
+                type: 'ATTACK_REQUEST',
+                data: {
+                  moveName,
+                  characterName,
+                  isSaveMove: false,
+                  toHit: totalToHit,
+                  baseToHit: toHit,
+                  attackBonus: attackBonus,
+                  damageDice,
+                  advantage: rollContext.advantage,
+                  disadvantage: rollContext.disadvantage
+                }
+              }, response => {
+                if (chrome.runtime.lastError) {
+                  log('❌ Chrome error:', chrome.runtime.lastError.message);
+                  showNotification(`✗ ${chrome.runtime.lastError.message}`, 'error');
+                  return;
+                }
+                if (response && response.success) {
+                  showNotification(`⚔ ${moveName} rolled!`, 'success');
+                } else {
+                  showNotification(`✗ ${response?.error || 'Unknown error'}`, 'error');
+                }
+              });
+            }
           }
-        }, response => {
-          if (chrome.runtime.lastError) {
-            log('❌ Chrome error:', chrome.runtime.lastError.message);
-            showNotification(`✗ ${chrome.runtime.lastError.message}`, 'error');
-            return;
-          }
-          if (response && response.success) {
-            showNotification(`⚔ ${moveName} rolled!`, 'success');
-          } else {
-            showNotification(`✗ ${response?.error || 'Unknown error'}`, 'error');
-          }
-        });
+        );
       });
 
       injected++;
-      log(`✓ Attack handler injected: ${moveName} (toHit=${toHit}, damage=${damageDice})`);
+      if (saveDC !== null) {
+        log(`✓ Save move handler injected: ${moveName} (${saveType} Save DC=${saveDC}, damage=${damageDice})`);
+      } else {
+        log(`✓ Attack handler injected: ${moveName} (toHit=${toHit}, damage=${damageDice})`);
+      }
     });
 
-    log(`Injected ${injected} attack handlers`);
+    log(`Injected ${injected} move handlers`);
   }
 
   /**
