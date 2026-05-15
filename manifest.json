@@ -13,16 +13,12 @@
     "activeTab",
     "scripting",
     "storage",
-    "tabs",
-    "webRequest"
+    "tabs"
   ],
   "host_permissions": [
     "https://poke5e.app/*",
-    "http://poke5e.app/*",
     "https://roll20.net/*",
-    "http://roll20.net/*",
-    "https://app.roll20.net/*",
-    "http://app.roll20.net/*"
+    "https://app.roll20.net/*"
   ],
   "content_scripts": [
     {
