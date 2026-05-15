@@ -5,11 +5,15 @@
 
 log('Initialized');
 
+// Track if a status check is in progress
+let statusCheckInProgress = false;
+
 // DOM Elements
-const extensionStatusEl = document.getElementById('extension-status');
+const extensionStatusEl = document.getElementById('poke5e-status');
 const roll20StatusEl = document.getElementById('roll20-status');
 const enableExtensionCheckbox = document.getElementById('enable-extension');
-const testConnectionBtn = document.getElementById('test-connection');
+const attackBonusInput = document.getElementById('attack-bonus');
+const saveDcBonusInput = document.getElementById('save-dc-bonus');
 const reportBugLink = document.getElementById('report-bug');
 const viewSourceLink = document.getElementById('view-source');
 
@@ -17,40 +21,68 @@ const viewSourceLink = document.getElementById('view-source');
  * Check Roll20 tab status
  */
 async function checkRoll20Status() {
+  // Prevent concurrent checks
+  if (statusCheckInProgress) {
+    log('Status check already in progress, skipping');
+    return;
+  }
+  
+  statusCheckInProgress = true;
+  
   try {
     log('Checking Roll20 status...');
     
     const response = await new Promise((resolve, reject) => {
+      let resolved = false;
+      
       const timeout = setTimeout(() => {
-        reject(new Error('Status check timeout'));
-      }, 5000);
+        if (!resolved) {
+          resolved = true;
+          log('Status check timeout - using default response');
+          resolve({ poke5eFound: false, roll20Found: false });
+        }
+      }, 3000);
       
       chrome.runtime.sendMessage(
         { type: 'CHECK_STATUS' },
         (response) => {
-          clearTimeout(timeout);
-          if (chrome.runtime.lastError) {
-            reject(chrome.runtime.lastError);
-          } else {
-            resolve(response);
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timeout);
+            log('Raw callback response:', response, 'lastError:', chrome.runtime.lastError);
+            if (chrome.runtime.lastError) {
+              log('Chrome runtime error:', chrome.runtime.lastError);
+              resolve({ poke5eFound: false, roll20Found: false });
+            } else if (response === undefined) {
+              log('Response is undefined, using default');
+              resolve({ poke5eFound: false, roll20Found: false });
+            } else {
+              resolve(response);
+            }
           }
         }
       );
     });
 
     log('Status response:', response);
+    
+    // Ensure we have elements before updating
+    if (!extensionStatusEl || !roll20StatusEl) {
+      log('ERROR: Status elements not found in DOM');
+      return;
+    }
 
-    // Update extension status
-    if (response || response.extensionActive) {
-      extensionStatusEl.textContent = '🟢 Active';
+    // Update poke5e status
+    if (response && response.poke5eFound) {
+      extensionStatusEl.textContent = '🟢 Connected';
       extensionStatusEl.className = 'value enabled';
     } else {
-      extensionStatusEl.textContent = '🔴 Inactive';
+      extensionStatusEl.textContent = '🔴 Not Found';
       extensionStatusEl.className = 'value disabled';
     }
 
     // Update Roll20 status
-    if (response || response.roll20Found) {
+    if (response && response.roll20Found) {
       roll20StatusEl.textContent = '🟢 Connected';
       roll20StatusEl.className = 'value enabled';
     } else {
@@ -63,6 +95,8 @@ async function checkRoll20Status() {
     extensionStatusEl.className = 'value disabled';
     roll20StatusEl.textContent = '❌ Error';
     roll20StatusEl.className = 'value disabled';
+  } finally {
+    statusCheckInProgress = false;
   }
 }
 
@@ -73,6 +107,13 @@ async function loadSettings() {
   const settings = await StorageManager.getAllSettings();
 
   enableExtensionCheckbox.checked = settings.extensionEnabled;
+  
+  // Load bonus values
+  const attackBonus = await StorageManager.getSetting('attackBonus', 0);
+  const saveDcBonus = await StorageManager.getSetting('saveDcBonus', 0);
+  
+  if (attackBonusInput) attackBonusInput.value = attackBonus;
+  if (saveDcBonusInput) saveDcBonusInput.value = saveDcBonus;
 }
 
 /**
@@ -82,6 +123,19 @@ async function saveSettings() {
   await StorageManager.setSetting('extensionEnabled', enableExtensionCheckbox.checked);
 
   showFeedback('Settings saved!');
+}
+
+/**
+ * Save bonus values to storage
+ */
+async function saveBonuses() {
+  const attackBonus = parseInt(attackBonusInput.value) || 0;
+  const saveDcBonus = parseInt(saveDcBonusInput.value) || 0;
+  
+  await StorageManager.setSetting('attackBonus', attackBonus);
+  await StorageManager.setSetting('saveDcBonus', saveDcBonus);
+
+  showFeedback('Bonus saved!');
 }
 
 /**
@@ -129,23 +183,35 @@ async function resetAllSettings() {
 /**
  * Event listeners
  */
-enableExtensionCheckbox.addEventListener('change', saveSettings);
+if (enableExtensionCheckbox) {
+  enableExtensionCheckbox.addEventListener('change', saveSettings);
+}
 
-testConnectionBtn.addEventListener('click', testConnection);
+if (attackBonusInput) {
+  attackBonusInput.addEventListener('change', saveBonuses);
+}
 
-reportBugLink.addEventListener('click', (e) => {
-  e.preventDefault();
-  chrome.tabs.create({
-    url: 'https://github.com/nx23/pkm5e-extension/issues'
+if (saveDcBonusInput) {
+  saveDcBonusInput.addEventListener('change', saveBonuses);
+}
+
+if (reportBugLink) {
+  reportBugLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    chrome.tabs.create({
+      url: 'https://github.com/nx23/pkm5e-extension/issues'
+    });
   });
-});
+}
 
-viewSourceLink.addEventListener('click', (e) => {
-  e.preventDefault();
-  chrome.tabs.create({
-    url: 'https://github.com/nx23/pkm5e-extension'
+if (viewSourceLink) {
+  viewSourceLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    chrome.tabs.create({
+      url: 'https://github.com/nx23/pkm5e-extension'
+    });
   });
-});
+}
 
 // Initialize on load
 document.addEventListener('DOMContentLoaded', async () => {

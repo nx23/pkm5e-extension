@@ -21,8 +21,8 @@ body {
 
 /* Header */
 .header {
-    background: linear-gradient(135deg, #FFD700 0%, #FFC700 100%);
-    color: #333;
+    background: linear-gradient(135deg, #00BCD4 0%, #1E88E5 100%);
+    color: #FFFFFF;
     padding: 20px;
     text-align: center;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -31,6 +31,17 @@ body {
 .header h1 {
     font-size: 20px;
     margin-bottom: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.header h1 .icon {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
 
 .header .subtitle {
@@ -54,7 +65,7 @@ section h2 {
     margin-bottom: 12px;
     text-transform: uppercase;
     color: #555;
-    border-bottom: 2px solid #FFD700;
+    border-bottom: 2px solid #FF9800;
     padding-bottom: 8px;
 }
 
@@ -117,6 +128,50 @@ section h2 {
     cursor: pointer;
 }
 
+/* Bonus Section */
+.bonus-section {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.bonus-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+}
+
+.bonus-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.bonus-item label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.bonus-item input[type="number"] {
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    background: #f9f9f9;
+}
+
+.bonus-item input[type="number"]:focus {
+    outline: none;
+    border-color: #00BCD4;
+    background: white;
+    box-shadow: 0 0 4px rgba(0, 188, 212, 0.2);
+}
+
 .setting label {
     display: flex;
     flex-direction: column;
@@ -154,14 +209,14 @@ section h2 {
 }
 
 .btn-primary {
-    background: #FFD700;
-    color: #333;
+    background: #FF9800;
+    color: #FFFFFF;
 }
 
 .btn-primary:hover {
-    background: #FFC700;
+    background: #FF6F00;
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+    box-shadow: 0 4px 12px rgba(255, 152, 0, 0.4);
 }
 
 .btn-secondary {
@@ -208,7 +263,7 @@ section h2 {
 }
 
 .footer a {
-    color: #FFD700;
+    color: #FF9800;
     text-decoration: none;
     font-weight: 600;
 }

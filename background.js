@@ -102,6 +102,52 @@ async function findRoll20Tab() {
 }
 
 /**
+ * Find an active Poke5e.app tab
+ * @returns {Promise<Object|null>} Tab object or null if not found
+ */
+async function findPoke5eTab() {
+  try {
+    log('Querying for Poke5e tabs...');
+    
+    // Query for tabs matching Poke5e URLs
+    const tabs = await chrome.tabs.query({
+      url: ['*://poke5e.app/*', '*://www.poke5e.app/*']
+    });
+    
+    log('Poke5e tab query returned:', tabs.length, 'tabs');
+    
+    if (tabs && tabs.length > 0) {
+      const poke5eTab = tabs[0];
+      log('Found Poke5e tab:', poke5eTab.id, 'URL:', poke5eTab.url);
+      return poke5eTab;
+    }
+    
+    // Fallback: query all tabs and filter manually
+    log('No Poke5e tabs found with URL filter, trying manual filter...');
+    const allTabs = await chrome.tabs.query({});
+    
+    const poke5eTab = allTabs.find(tab => {
+      const hasUrl = tab.url && typeof tab.url === 'string';
+      const isPoke5e = hasUrl && (
+        tab.url.includes('poke5e.app')
+      );
+      return isPoke5e;
+    });
+    
+    if (poke5eTab) {
+      log('Found Poke5e tab via manual filter:', poke5eTab.id);
+    } else {
+      log('No Poke5e tab found');
+    }
+    
+    return poke5eTab || null;
+  } catch (error) {
+    log('Error finding Poke5e tab:', error.message);
+    return null;
+  }
+}
+
+/**
  * Send a roll request to Roll20
  * @param {Object} rollData - The roll request data
  */
@@ -189,17 +235,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     log('Processing status check...');
     (async () => {
       try {
-        const tab = await findRoll20Tab();
+        const roll20Tab = await findRoll20Tab();
+        const poke5eTab = await findPoke5eTab();
         const response = {
-          extensionActive: true,
-          roll20Found: !!tab
+          poke5eFound: !!poke5eTab,
+          roll20Found: !!roll20Tab
         };
         log('Status check response:', response);
         sendResponse(response);
       } catch (error) {
         log('Error in status check handler:', error);
         sendResponse({
-          extensionActive: true,
+          poke5eFound: false,
           roll20Found: false,
           error: error.message
         });
@@ -238,6 +285,42 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({
           tabs: [],
           roll20Found: false,
+          error: error.message
+        });
+      }
+    })();
+    return true;
+  }
+
+  // Handle get bonuses request
+  if (request.type === 'GET_BONUSES') {
+    log('Processing get bonuses request...');
+    (async () => {
+      try {
+        // Import storage to get bonuses
+        const attackBonus = await new Promise((resolve) => {
+          chrome.storage.sync.get(['attackBonus'], (result) => {
+            resolve(result.attackBonus || 0);
+          });
+        });
+        
+        const saveDcBonus = await new Promise((resolve) => {
+          chrome.storage.sync.get(['saveDcBonus'], (result) => {
+            resolve(result.saveDcBonus || 0);
+          });
+        });
+        
+        const response = {
+          attackBonus: parseInt(attackBonus),
+          saveDcBonus: parseInt(saveDcBonus)
+        };
+        log('Get bonuses response:', response);
+        sendResponse(response);
+      } catch (error) {
+        log('Error in get bonuses handler:', error);
+        sendResponse({
+          attackBonus: 0,
+          saveDcBonus: 0,
           error: error.message
         });
       }

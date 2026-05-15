@@ -205,7 +205,7 @@ let mutationObserverInstance = null;
 
 function setupMutationObserver() {
   const observer = new MutationObserver((mutations) => {
-    // Desconectar o observer para evitar capturar eventos durante reinjeção
+    // Disconnect the observer to avoid capturing events during reinjection
     observer.disconnect();
     
     // Debounce reinjection
@@ -226,7 +226,7 @@ function setupMutationObserver() {
           attributes: false
         });
       }
-    }, 500); // Reduzir debounce de 1000 para 500ms
+    }, 500);
   });
 
   observer.observe(document.body, {
@@ -240,7 +240,7 @@ function setupMutationObserver() {
   log('Mutation observer activated');
 }
 
-// Função para parar o observer se necessário
+// Function to stop the mutation observer
 function stopMutationObserver() {
   if (mutationObserverInstance) {
     mutationObserverInstance.disconnect();
@@ -322,15 +322,8 @@ if (document.readyState === 'loading') {
   initializeExtension();
 }
 
-// Setup debug interface immediately
-setupDebugInterface();
+// Expose debug utilities on window.pkm5e for console inspection
+window.pkm5e = setupDebugInterface();
 
-// Delay status checks to allow background worker to initialize
-log('Scheduling status checks after delay...');
-setTimeout(() => {
-  log('First status check...');
-  checkBackgroundStatus();
-  
-  // Then check periodically
-  setInterval(checkBackgroundStatus, 5000);
-}, 2000);
+// One-time status check after background worker has had time to initialize
+setTimeout(checkBackgroundStatus, 2000);
