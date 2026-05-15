@@ -9,7 +9,7 @@ log('Initialized');
 let statusCheckInProgress = false;
 
 // DOM Elements
-const extensionStatusEl = document.getElementById('extension-status');
+const extensionStatusEl = document.getElementById('poke5e-status');
 const roll20StatusEl = document.getElementById('roll20-status');
 const enableExtensionCheckbox = document.getElementById('enable-extension');
 const reportBugLink = document.getElementById('report-bug');
@@ -37,7 +37,7 @@ async function checkRoll20Status() {
         if (!resolved) {
           resolved = true;
           log('Status check timeout - using default response');
-          resolve({ extensionActive: true, roll20Found: false });
+          resolve({ poke5eFound: false, roll20Found: false });
         }
       }, 3000);
       
@@ -50,10 +50,10 @@ async function checkRoll20Status() {
             log('Raw callback response:', response, 'lastError:', chrome.runtime.lastError);
             if (chrome.runtime.lastError) {
               log('Chrome runtime error:', chrome.runtime.lastError);
-              resolve({ extensionActive: true, roll20Found: false });
+              resolve({ poke5eFound: false, roll20Found: false });
             } else if (response === undefined) {
               log('Response is undefined, using default');
-              resolve({ extensionActive: true, roll20Found: false });
+              resolve({ poke5eFound: false, roll20Found: false });
             } else {
               resolve(response);
             }
@@ -70,12 +70,12 @@ async function checkRoll20Status() {
       return;
     }
 
-    // Update extension status
-    if (response && response.extensionActive) {
-      extensionStatusEl.textContent = '🟢 Active';
+    // Update poke5e status
+    if (response && response.poke5eFound) {
+      extensionStatusEl.textContent = '🟢 Connected';
       extensionStatusEl.className = 'value enabled';
     } else {
-      extensionStatusEl.textContent = '🔴 Inactive';
+      extensionStatusEl.textContent = '🔴 Not Found';
       extensionStatusEl.className = 'value disabled';
     }
 
