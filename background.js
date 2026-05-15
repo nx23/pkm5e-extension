@@ -248,6 +248,42 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true;
   }
 
+  // Handle get bonuses request
+  if (request.type === 'GET_BONUSES') {
+    log('Processing get bonuses request...');
+    (async () => {
+      try {
+        // Import storage to get bonuses
+        const attackBonus = await new Promise((resolve) => {
+          chrome.storage.sync.get(['attackBonus'], (result) => {
+            resolve(result.attackBonus || 0);
+          });
+        });
+        
+        const saveDcBonus = await new Promise((resolve) => {
+          chrome.storage.sync.get(['saveDcBonus'], (result) => {
+            resolve(result.saveDcBonus || 0);
+          });
+        });
+        
+        const response = {
+          attackBonus: parseInt(attackBonus),
+          saveDcBonus: parseInt(saveDcBonus)
+        };
+        log('Get bonuses response:', response);
+        sendResponse(response);
+      } catch (error) {
+        log('Error in get bonuses handler:', error);
+        sendResponse({
+          attackBonus: 0,
+          saveDcBonus: 0,
+          error: error.message
+        });
+      }
+    })();
+    return true;
+  }
+
   // Unknown request type
   log('Unknown request type:', request.type);
   sendResponse({ error: 'Unknown request type' });

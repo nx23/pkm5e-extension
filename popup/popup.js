@@ -12,6 +12,8 @@ let statusCheckInProgress = false;
 const extensionStatusEl = document.getElementById('poke5e-status');
 const roll20StatusEl = document.getElementById('roll20-status');
 const enableExtensionCheckbox = document.getElementById('enable-extension');
+const attackBonusInput = document.getElementById('attack-bonus');
+const saveDcBonusInput = document.getElementById('save-dc-bonus');
 const reportBugLink = document.getElementById('report-bug');
 const viewSourceLink = document.getElementById('view-source');
 
@@ -105,6 +107,13 @@ async function loadSettings() {
   const settings = await StorageManager.getAllSettings();
 
   enableExtensionCheckbox.checked = settings.extensionEnabled;
+  
+  // Load bonus values
+  const attackBonus = await StorageManager.getSetting('attackBonus', 0);
+  const saveDcBonus = await StorageManager.getSetting('saveDcBonus', 0);
+  
+  if (attackBonusInput) attackBonusInput.value = attackBonus;
+  if (saveDcBonusInput) saveDcBonusInput.value = saveDcBonus;
 }
 
 /**
@@ -114,6 +123,19 @@ async function saveSettings() {
   await StorageManager.setSetting('extensionEnabled', enableExtensionCheckbox.checked);
 
   showFeedback('Settings saved!');
+}
+
+/**
+ * Save bonus values to storage
+ */
+async function saveBonuses() {
+  const attackBonus = parseInt(attackBonusInput.value) || 0;
+  const saveDcBonus = parseInt(saveDcBonusInput.value) || 0;
+  
+  await StorageManager.setSetting('attackBonus', attackBonus);
+  await StorageManager.setSetting('saveDcBonus', saveDcBonus);
+
+  showFeedback('Bonus saved!');
 }
 
 /**
@@ -163,6 +185,14 @@ async function resetAllSettings() {
  */
 if (enableExtensionCheckbox) {
   enableExtensionCheckbox.addEventListener('change', saveSettings);
+}
+
+if (attackBonusInput) {
+  attackBonusInput.addEventListener('change', saveBonuses);
+}
+
+if (saveDcBonusInput) {
+  saveDcBonusInput.addEventListener('change', saveBonuses);
 }
 
 if (reportBugLink) {
