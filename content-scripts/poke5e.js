@@ -319,15 +319,8 @@ if (document.readyState === 'loading') {
   initializeExtension();
 }
 
-// Setup debug interface immediately
-setupDebugInterface();
+// Expose debug utilities on window.pkm5e for console inspection
+window.pkm5e = setupDebugInterface();
 
-// Delay status checks to allow background worker to initialize
-log('Scheduling status checks after delay...');
-setTimeout(() => {
-  log('First status check...');
-  checkBackgroundStatus();
-  
-  // Then check periodically
-  setInterval(checkBackgroundStatus, 5000);
-}, 2000);
+// One-time status check after background worker has had time to initialize
+setTimeout(checkBackgroundStatus, 2000);

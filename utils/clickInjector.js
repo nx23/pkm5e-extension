@@ -131,7 +131,6 @@ const ClickInjector = (() => {
                 : `${rollContext.stat} ${rollContext.rollType}`,
               diceFormula: `1d20+${totalModifier}`,
               characterName: DataParser.getCharacterName(),
-              sheetData: DataParser.getCompleteSheetData(),
               advantage: rollContext.advantage,
               disadvantage: rollContext.disadvantage
             }
@@ -502,7 +501,7 @@ const ClickInjector = (() => {
    * Reinject handlers (useful after DOM changes)
    */
   function reinjectHandlers() {
-    log('Reinjectin handlers...');
+    log('Reinjecting handlers...');
     injectAllHandlers();
   }
 

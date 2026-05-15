@@ -49,50 +49,6 @@ const Roll20Integration = (() => {
   }
 
   /**
-   * Generate a dice formula from roll data
-   * @param {Object} rollData - Roll context
-   * @returns {string} Dice formula
-   */
-  function generateDiceFormula(rollData) {
-    const { modifier, stat, rollType, label, characterName } = rollData;
-
-    const modifierStr = modifier >= 0 ? `+${modifier}` : `${modifier}`;
-    const charDisplay = characterName
-      ? (typeof characterName === 'object' ? characterName.character : characterName)
-      : null;
-
-    let diceFormula = '1d20';
-    if (rollData.advantage) {
-      diceFormula = '2d20kh1'; // Roll 2d20, keep highest 1
-    } else if (rollData.disadvantage) {
-      diceFormula = '2d20kl1'; // Roll 2d20, keep lowest 1
-    }
-
-    // Add ADV or DIS tag immediately before the move/roll name
-    // If the label already contains " | " (character name embedded by EXECUTE_ATTACK),
-    // insert the tag after the first separator so the result is "CharName | ADV MoveName | Attack"
-    // instead of "ADV CharName | MoveName | Attack".
-    const advantageTag = rollData.advantage ? 'ADV ' : (rollData.disadvantage ? 'DIS ' : '');
-    let labelWithTag;
-    if (!label) {
-      labelWithTag = `${advantageTag}${stat} ${rollType}`;
-    } else if (advantageTag) {
-      const pipeIndex = label.indexOf(' | ');
-      labelWithTag = pipeIndex !== -1
-        ? label.slice(0, pipeIndex + 3) + advantageTag + label.slice(pipeIndex + 3)
-        : `${advantageTag}${label}`;
-    } else {
-      labelWithTag = label;
-    }
-    
-    const rollLabel = charDisplay
-      ? `${charDisplay} | ${labelWithTag}`
-      : labelWithTag;
-
-    return `${diceFormula}${modifierStr} [${rollLabel}]`;
-  }
-
-  /**
    * Send a Save DC message as a formatted Roll20 template card (no /roll)
    * @param {Object} opts
    * @returns {boolean} Success status
@@ -165,7 +121,9 @@ const Roll20Integration = (() => {
       : null;
 
     // Field label: use supplied label (e.g. "Athletics", "STR ability", "DEX save")
-    const fieldLabel = label || `${stat} ${rollType}`;
+    const baseLabel  = label || `${stat} ${rollType}`;
+    const advTag     = advantage ? ' (ADV)' : disadvantage ? ' (DIS)' : '';
+    const fieldLabel = `${baseLabel}${advTag}`;
     const cardName   = charDisplay ? `${charDisplay} | ${fieldLabel}` : fieldLabel;
 
     const command = `&{template:default} {{name=${cardName}}} {{${fieldLabel}=[[${diceFormula}]]}}`;
@@ -224,32 +182,37 @@ const Roll20Integration = (() => {
     const bonusDice = damageDice.match(/^(\d+d\d+)/)?.[1];
     if (!bonusDice) return;
 
-    // Snapshot BEFORE sending
-    const rollsBefore = document.querySelectorAll('.inlinerollresult').length;
-
     const giveUpTimer = setTimeout(() => {
       observer.disconnect();
-      const rollsNow = document.querySelectorAll('.inlinerollresult').length;
-      log(`⚠️ watchForCritBonus timed out. inlinerollresult: ${rollsBefore}→${rollsNow}`);
+      log(`⚠️ watchForCritBonus timed out (no template card appeared)`);
     }, 5000);
 
-    const observer = new MutationObserver(() => {
-      const allRolls = document.querySelectorAll('.inlinerollresult');
-      if (allRolls.length <= rollsBefore) return;
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node.nodeType !== 1) continue;
 
-      observer.disconnect();
-      clearTimeout(giveUpTimer);
+          // Roll20 template cards render as <table> inside a wrapper div.
+          // Find any table inside the added subtree (or the node itself).
+          const tables = node.tagName === 'TABLE'
+            ? [node]
+            : [...(node.querySelectorAll?.('table') ?? [])];
 
-      // Walk up from the first new roll to find its containing table,
-      // then check only the first tbody tr — that's the Attack row.
-      // fullcrit on later rows = max damage dice, not a crit.
-      const attackRoll = [...allRolls][rollsBefore];
-      const table = attackRoll?.closest('table');
-      const firstTdRoll = table?.querySelector('tbody tr:first-child .inlinerollresult');
-      const isCrit = firstTdRoll?.classList.contains('fullcrit') ?? false;
+          for (const table of tables) {
+            // First tbody row = Attack field; fullcrit on it = natural 20
+            const firstTdRoll = table.querySelector('tbody tr:first-child .inlinerollresult');
+            if (!firstTdRoll) continue;
 
-      log(`Crit check: fullcrit in first tbody td = ${isCrit}`);
-      if (isCrit) sendCritBonus(cardName, bonusDice);
+            observer.disconnect();
+            clearTimeout(giveUpTimer);
+
+            const isCrit = firstTdRoll.classList.contains('fullcrit');
+            log(`Crit check: fullcrit in first tbody td = ${isCrit}`);
+            if (isCrit) sendCritBonus(cardName, bonusDice);
+            return;
+          }
+        }
+      }
     });
 
     observer.observe(document.body, { childList: true, subtree: true });
@@ -434,7 +397,6 @@ const Roll20Integration = (() => {
   return {
     setupMessageListener,
     injectRollIntoChat,
-    generateDiceFormula,
     findChatInput,
     showNotification
   };
