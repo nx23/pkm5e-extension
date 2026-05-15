@@ -80,26 +80,35 @@ const ClickInjector = (() => {
   }
 
   /**
-   * Send a roll or attack request to Roll20 via chrome.storage.local.
-   * Bypasses the service worker entirely — the Roll20 content script
-   * listens for storage changes and executes the roll directly.
-   * This is the most reliable approach across Chrome and Firefox MV3.
-   * @param {Object} payload - Message payload with `type` and `data`
+   * Send a message to the background service worker via a long-lived port.
+   * chrome.runtime.connect() reliably wakes the service worker in Firefox MV3,
+   * unlike sendMessage() which fails silently when the worker is suspended.
+   * @param {Object} payload - Message to send
+   * @param {Function} [callback] - Called with the response
    */
-  function sendViaStorage(payload) {
-    if (!chrome.storage || !chrome.storage.local) {
-      showNotification('✗ Extension context not available', 'error');
-      log('Error: chrome.storage not available');
-      return;
+  function sendViaPort(payload, callback) {
+    try {
+      const port = chrome.runtime.connect({ name: 'poke5e-roll' });
+      let responded = false;
+
+      port.onDisconnect.addListener(() => {
+        if (!responded) {
+          responded = true;
+          const err = chrome.runtime.lastError;
+          if (err) log('Port disconnected with error:', err.message);
+          if (callback) callback({ success: false, error: (err && err.message) || 'Port disconnected without response' });
+        }
+      });
+      port.onMessage.addListener((response) => {
+        responded = true;
+        port.disconnect();
+        if (callback) callback(response);
+      });
+      port.postMessage(payload);
+    } catch (error) {
+      log('❌ sendViaPort error:', error.message);
+      if (callback) callback({ success: false, error: error.message });
     }
-    chrome.storage.local.set({ poke5e_pendingRoll: payload }, () => {
-      if (chrome.runtime.lastError) {
-        log('❌ Storage write error:', chrome.runtime.lastError.message);
-        showNotification(`✗ ${chrome.runtime.lastError.message}`, 'error');
-        return;
-      }
-      log('✓ Roll data written to storage');
-    });
   }
 
   /**
@@ -108,76 +117,62 @@ const ClickInjector = (() => {
    */
   function sendRollRequest(rollContext) {
     try {
-      // Verify extension context
-      if (!chrome.runtime || !chrome.runtime.sendMessage) {
+      if (!chrome.runtime || !chrome.runtime.connect) {
         showNotification('✗ Extension context not available', 'error');
         log('Error: Chrome extension context not available');
         return;
       }
-      
+
       log('Sending ROLL_REQUEST to background:', rollContext);
-      
-      // Retrieve bonuses from storage
-      sendViaStorage(
-        { type: 'GET_BONUSES' },
-        (bonusResponse) => {
-          if (chrome.runtime.lastError) {
-            log('⚠ Could not retrieve bonuses:', chrome.runtime.lastError);
-            bonusResponse = { attackBonus: 0, saveDcBonus: 0 };
-          }
-          
-          const attackBonus = bonusResponse?.attackBonus || 0;
-          const saveDcBonus = bonusResponse?.saveDcBonus || 0;
-          
-          // Determine which bonus to apply
-          let extraBonus = 0;
-          if (rollContext.rollType === 'attack') {
-            extraBonus = attackBonus;
-            log(`✓ Applying attack bonus: +${attackBonus}`);
-          } else if (rollContext.rollType === 'save') {
-            extraBonus = saveDcBonus;
-            log(`✓ Applying save DC bonus: +${saveDcBonus}`);
-          }
-          
-          const totalModifier = rollContext.modifier + extraBonus;
-          
-          sendViaStorage({
-            type: 'ROLL_REQUEST',
-            data: {
-              rollType: rollContext.rollType,
-              stat: rollContext.stat,
-              modifier: rollContext.modifier,
-              extraBonus: extraBonus,
-              totalModifier: totalModifier,
-              label: rollContext.rollType === 'skill'
-                ? rollContext.stat
-                : `${rollContext.stat} ${rollContext.rollType}`,
-              diceFormula: `1d20+${totalModifier}`,
-              characterName: DataParser.getCharacterName(),
-              advantage: rollContext.advantage,
-              disadvantage: rollContext.disadvantage
-            }
-          }, response => {
-            log('Response received from background:', response);
-            
-            if (chrome.runtime.lastError) {
-              const errorMsg = chrome.runtime.lastError.message;
-              log('❌ Chrome error:', errorMsg);
-              showNotification(`✗ Extension error: ${errorMsg}`, 'error');
-              return;
-            }
-            
-            if (response && response.success) {
-              log('✓ Roll executed successfully');
-              showNotification('✓ Roll sent to Roll20', 'success');
-            } else {
-              const error = response?.error || response?.message || 'Unknown error';
-              log('❌ Roll failed:', error);
-              showNotification(`✗ ${error}`, 'error');
-            }
-          });
+
+      // Read bonuses directly from storage — no round-trip through the background needed
+      chrome.storage.sync.get(['attackBonus', 'saveDcBonus'], (result) => {
+        if (chrome.runtime.lastError) {
+          log('⚠ Could not retrieve bonuses:', chrome.runtime.lastError);
         }
-      );
+
+        const attackBonus = parseInt(result?.attackBonus) || 0;
+        const saveDcBonus = parseInt(result?.saveDcBonus) || 0;
+
+        let extraBonus = 0;
+        if (rollContext.rollType === 'attack') {
+          extraBonus = attackBonus;
+          log(`✓ Applying attack bonus: +${attackBonus}`);
+        } else if (rollContext.rollType === 'save') {
+          extraBonus = saveDcBonus;
+          log(`✓ Applying save DC bonus: +${saveDcBonus}`);
+        }
+
+        const totalModifier = rollContext.modifier + extraBonus;
+
+        const rollData = {
+          rollType: rollContext.rollType,
+          stat: rollContext.stat,
+          modifier: rollContext.modifier,
+          extraBonus,
+          totalModifier,
+          label: rollContext.rollType === 'skill'
+            ? rollContext.stat
+            : `${rollContext.stat} ${rollContext.rollType}`,
+          diceFormula: `1d20+${totalModifier}`,
+          characterName: DataParser.getCharacterName(),
+          advantage: rollContext.advantage,
+          disadvantage: rollContext.disadvantage
+        };
+
+        log('Writing ROLL_REQUEST to storage:', rollData);
+        chrome.storage.local.set({
+          pkm5eRollRequest: { type: 'ROLL_REQUEST', data: rollData, nonce: Date.now() }
+        }, () => {
+          if (chrome.runtime.lastError) {
+            log('❌ Storage write failed:', chrome.runtime.lastError.message);
+            showNotification('✗ Failed to send roll', 'error');
+          } else {
+            log('✓ Roll request sent via storage');
+            showNotification('✓ Roll sent to Roll20', 'success');
+          }
+        });
+      });
     } catch (error) {
       log('❌ Exception in sendRollRequest:', error.message);
       showNotification(`✗ Error: ${error.message}`, 'error');
@@ -423,69 +418,56 @@ const ClickInjector = (() => {
         const rollContext = createRollContext(nameLink, 'attack', e);
         const characterName = DataParser.getCharacterName();
 
-        sendViaStorage(
-          { type: 'GET_BONUSES' },
-          (bonusResponse) => {
-            if (chrome.runtime.lastError) {
-              log('⚠ Could not retrieve bonuses:', chrome.runtime.lastError);
-              bonusResponse = { attackBonus: 0, saveDcBonus: 0 };
-            }
-
-            const attackBonus = bonusResponse?.attackBonus || 0;
-            const saveDcBonus = bonusResponse?.saveDcBonus || 0;
-
-            const commonData = {
-              moveName,
-              characterName,
-              damageDice,
-              moveType,
-              moveTime,
-              moveRange,
-              moveDuration,
-              moveDescription,
-              advantage: rollContext.advantage,
-              disadvantage: rollContext.disadvantage
-            };
-
-            if (saveDC !== null) {
-              const totalDC = saveDC + saveDcBonus;
-              if (saveDcBonus !== 0) {
-                log(`✓ Adding save DC bonus: ${saveDC} + ${saveDcBonus} = ${totalDC}`);
-              }
-              chrome.runtime.sendMessage({
-                type: 'ATTACK_REQUEST',
-                data: { ...commonData, isSaveMove: true, saveType, saveDC: totalDC, baseSaveDC: saveDC, saveDcBonus }
-              }, response => {
-                if (chrome.runtime.lastError) { showNotification(`✗ ${chrome.runtime.lastError.message}`, 'error'); return; }
-                if (response?.success) showNotification(`💨 ${moveName} rolled!`, 'success');
-                else showNotification(`✗ ${response?.error || 'Unknown error'}`, 'error');
-              });
-            } else if (toHit !== null) {
-              const totalToHit = toHit + attackBonus;
-              if (attackBonus !== 0) {
-                log(`✓ Adding attack bonus: ${toHit} + ${attackBonus} = ${totalToHit}`);
-              }
-              chrome.runtime.sendMessage({
-                type: 'ATTACK_REQUEST',
-                data: { ...commonData, isSaveMove: false, toHit: totalToHit, baseToHit: toHit, attackBonus }
-              }, response => {
-                if (chrome.runtime.lastError) { showNotification(`✗ ${chrome.runtime.lastError.message}`, 'error'); return; }
-                if (response?.success) showNotification(`⚔ ${moveName} rolled!`, 'success');
-                else showNotification(`✗ ${response?.error || 'Unknown error'}`, 'error');
-              });
-            } else {
-              // Info-only move: no attack/save roll, just send the card
-              chrome.runtime.sendMessage({
-                type: 'ATTACK_REQUEST',
-                data: { ...commonData, isSaveMove: false, toHit: null, saveDC: null }
-              }, response => {
-                if (chrome.runtime.lastError) { showNotification(`✗ ${chrome.runtime.lastError.message}`, 'error'); return; }
-                if (response?.success) showNotification(`✓ ${moveName} sent!`, 'success');
-                else showNotification(`✗ ${response?.error || 'Unknown error'}`, 'error');
-              });
-            }
+        // Read bonuses directly from storage — no round-trip through the background needed
+        chrome.storage.sync.get(['attackBonus', 'saveDcBonus'], (result) => {
+          if (chrome.runtime.lastError) {
+            log('⚠ Could not retrieve bonuses:', chrome.runtime.lastError);
           }
-        );
+
+          const attackBonus = parseInt(result?.attackBonus) || 0;
+          const saveDcBonus = parseInt(result?.saveDcBonus) || 0;
+
+          const commonData = {
+            moveName,
+            characterName,
+            damageDice,
+            moveType,
+            moveTime,
+            moveRange,
+            moveDuration,
+            moveDescription,
+            advantage: rollContext.advantage,
+            disadvantage: rollContext.disadvantage
+          };
+
+          let payload;
+          if (saveDC !== null) {
+            const totalDC = saveDC + saveDcBonus;
+            if (saveDcBonus !== 0) log(`✓ Adding save DC bonus: ${saveDC} + ${saveDcBonus} = ${totalDC}`);
+            payload = { type: 'ATTACK_REQUEST', data: { ...commonData, isSaveMove: true, saveType, saveDC: totalDC, baseSaveDC: saveDC, saveDcBonus } };
+          } else if (toHit !== null) {
+            const totalToHit = toHit + attackBonus;
+            if (attackBonus !== 0) log(`✓ Adding attack bonus: ${toHit} + ${attackBonus} = ${totalToHit}`);
+            payload = { type: 'ATTACK_REQUEST', data: { ...commonData, isSaveMove: false, toHit: totalToHit, baseToHit: toHit, attackBonus } };
+          } else {
+            payload = { type: 'ATTACK_REQUEST', data: { ...commonData, isSaveMove: false, toHit: null, saveDC: null } };
+          }
+
+          const emoji = saveDC !== null ? '💨' : toHit !== null ? '⚔' : '✓';
+          const suffix = toHit !== null || saveDC !== null ? 'rolled!' : 'sent!';
+          log('Writing ATTACK_REQUEST to storage:', payload);
+          chrome.storage.local.set({
+            pkm5eRollRequest: { ...payload, nonce: Date.now() }
+          }, () => {
+            if (chrome.runtime.lastError) {
+              log('❌ Storage write failed:', chrome.runtime.lastError.message);
+              showNotification('✗ Failed to send', 'error');
+            } else {
+              log('✓ Attack request sent via storage');
+              showNotification(`${emoji} ${moveName} ${suffix}`, 'success');
+            }
+          });
+        });
       });
 
       injected++;

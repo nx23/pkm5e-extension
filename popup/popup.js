@@ -18,83 +18,37 @@ const reportBugLink = document.getElementById('report-bug');
 const viewSourceLink = document.getElementById('view-source');
 
 /**
- * Check Roll20 tab status
+ * Check tab status by querying directly — no background service worker needed.
+ * The popup has the 'tabs' permission, so it can call chrome.tabs.query itself.
  */
 async function checkRoll20Status() {
-  // Prevent concurrent checks
   if (statusCheckInProgress) {
     log('Status check already in progress, skipping');
     return;
   }
-  
-  statusCheckInProgress = true;
-  
-  try {
-    log('Checking Roll20 status...');
-    
-    const response = await new Promise((resolve, reject) => {
-      let resolved = false;
-      
-      const timeout = setTimeout(() => {
-        if (!resolved) {
-          resolved = true;
-          log('Status check timeout - using default response');
-          resolve({ poke5eFound: false, roll20Found: false });
-        }
-      }, 3000);
-      
-      chrome.runtime.sendMessage(
-        { type: 'CHECK_STATUS' },
-        (response) => {
-          if (!resolved) {
-            resolved = true;
-            clearTimeout(timeout);
-            log('Raw callback response:', response, 'lastError:', chrome.runtime.lastError);
-            if (chrome.runtime.lastError) {
-              log('Chrome runtime error:', chrome.runtime.lastError);
-              resolve({ poke5eFound: false, roll20Found: false });
-            } else if (response === undefined) {
-              log('Response is undefined, using default');
-              resolve({ poke5eFound: false, roll20Found: false });
-            } else {
-              resolve(response);
-            }
-          }
-        }
-      );
-    });
 
-    log('Status response:', response);
-    
-    // Ensure we have elements before updating
+  statusCheckInProgress = true;
+
+  try {
+    log('Checking status via tabs query...');
+    const allTabs = await chrome.tabs.query({});
+    const poke5eFound = allTabs.some(t => t.url && t.url.includes('poke5e.app'));
+    const roll20Found = allTabs.some(t => t.url && (t.url.includes('roll20.net') || t.url.includes('app.roll20.net')));
+    log('Status:', { poke5eFound, roll20Found });
+
     if (!extensionStatusEl || !roll20StatusEl) {
       log('ERROR: Status elements not found in DOM');
       return;
     }
 
-    // Update poke5e status
-    if (response && response.poke5eFound) {
-      extensionStatusEl.textContent = '🟢 Connected';
-      extensionStatusEl.className = 'value enabled';
-    } else {
-      extensionStatusEl.textContent = '🔴 Not Found';
-      extensionStatusEl.className = 'value disabled';
-    }
-
-    // Update Roll20 status
-    if (response && response.roll20Found) {
-      roll20StatusEl.textContent = '🟢 Connected';
-      roll20StatusEl.className = 'value enabled';
-    } else {
-      roll20StatusEl.textContent = '🔴 Not Found';
-      roll20StatusEl.className = 'value disabled';
-    }
+    extensionStatusEl.textContent = poke5eFound ? '🟢 Connected' : '🔴 Not Found';
+    extensionStatusEl.className = poke5eFound ? 'value enabled' : 'value disabled';
+    roll20StatusEl.textContent = roll20Found ? '🟢 Connected' : '🔴 Not Found';
+    roll20StatusEl.className = roll20Found ? 'value enabled' : 'value disabled';
   } catch (error) {
     log('Error checking status:', error);
-    extensionStatusEl.textContent = '❌ Error';
-    extensionStatusEl.className = 'value disabled';
-    roll20StatusEl.textContent = '❌ Error';
-    roll20StatusEl.className = 'value disabled';
+    if (extensionStatusEl) { extensionStatusEl.textContent = '❌ Error'; extensionStatusEl.className = 'value disabled'; }
+    if (roll20StatusEl) { roll20StatusEl.textContent = '❌ Error'; roll20StatusEl.className = 'value disabled'; }
   } finally {
     statusCheckInProgress = false;
   }

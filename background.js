@@ -6,8 +6,13 @@
 // Import logger utilities
 importScripts('utils/logger.js');
 
-// Keep the service worker alive in Firefox (MV3 workers are killed after inactivity)
-chrome.alarms.create('keepAlive', { periodInMinutes: 0.4 });
+// Keep the service worker alive in Firefox (MV3 workers are killed after inactivity).
+// Firefox enforces a minimum of 1 minute; Chrome allows shorter intervals.
+try {
+  chrome.alarms.create('keepAlive', { periodInMinutes: 1 });
+} catch (e) {
+  console.warn('[PKM5e] Could not create keepalive alarm:', e);
+}
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'keepAlive') {
     log('Service worker keepalive ping');
@@ -39,6 +44,9 @@ chrome.runtime.onConnect.addListener(port => {
           });
           response = response || { success: true };
         }
+      } else if (request.type === 'CHECK_STATUS') {
+        const [roll20Tab, poke5eTab] = await Promise.all([findRoll20Tab(), findPoke5eTab()]);
+        response = { poke5eFound: !!poke5eTab, roll20Found: !!roll20Tab };
       } else {
         response = { success: false, error: 'Unknown request type' };
       }

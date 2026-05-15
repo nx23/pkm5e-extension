@@ -34,7 +34,7 @@
   ],
   "content_scripts": [
     {
-      "matches": ["https://poke5e.app/*", "http://poke5e.app/*"],
+      "matches": ["https://poke5e.app/*"],
       "js": ["utils/logger.js", "utils/storage.js", "utils/dataParser.js", "utils/clickInjector.js", "content-scripts/poke5e.js"],
       "css": ["styles/poke5e-overlay.css"],
       "run_at": "document_end"
@@ -52,7 +52,7 @@
   "web_accessible_resources": [
     {
       "resources": ["assets/d20.png", "assets/d20-adv.png", "assets/d20-dadv.png"],
-      "matches": ["https://poke5e.app/*", "http://poke5e.app/*"]
+      "matches": ["https://poke5e.app/*"]
     }
   ]
 }

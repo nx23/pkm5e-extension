@@ -406,12 +406,48 @@ const Roll20Integration = (() => {
     });
 
     log('✓ Roll20 message listener activated');
+
+    // Storage-based listener: receives requests written by the poke5e content script.
+    // This bypasses the background service worker entirely, avoiding Firefox MV3
+    // service worker lifecycle issues (worker suspended = port disconnects without response).
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local' || !changes.pkm5eRollRequest) return;
+      const req = changes.pkm5eRollRequest.newValue;
+      if (!req) return; // key was removed — ignore
+
+      log('Storage request received:', req.type, 'nonce:', req.nonce);
+
+      try {
+        if (req.type === 'ROLL_REQUEST') {
+          log('Processing storage ROLL_REQUEST...');
+          injectRollIntoChat(req.data);
+        } else if (req.type === 'ATTACK_REQUEST') {
+          log('Processing storage ATTACK_REQUEST...');
+          const { moveName, characterName, toHit, damageDice, advantage, disadvantage,
+                  isSaveMove, saveType, saveDC, moveType, moveTime, moveRange, moveDuration, moveDescription } = req.data;
+          if (isSaveMove && saveDC !== null && saveDC !== undefined) {
+            injectSaveDCCard({ moveName, characterName, saveType, saveDC, damageDice, moveType, moveTime, moveRange, moveDuration, moveDescription });
+          } else if (toHit !== null && toHit !== undefined) {
+            injectAttackTemplate({ moveName, characterName, toHit, damageDice, advantage, disadvantage, moveType, moveTime, moveRange, moveDuration, moveDescription });
+          } else {
+            injectInfoCard({ moveName, characterName, moveType, moveTime, moveRange, moveDuration, moveDescription });
+          }
+        }
+      } catch (e) {
+        log('❌ Error processing storage request:', e.message);
+      }
+
+      // Remove the key so stale requests don't replay on page reload.
+      // The resulting onChanged (with newValue=undefined) is ignored by the `if (!req) return` guard above.
+      chrome.storage.local.remove('pkm5eRollRequest');
+    });
+
+    log('✓ Storage request listener activated');
   }
 
   // Public API
   return {
     setupMessageListener,
-    setupStorageListener,
     injectRollIntoChat,
     findChatInput,
     showNotification
