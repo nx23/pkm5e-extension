@@ -97,14 +97,20 @@ const Roll20Integration = (() => {
    * @param {Object} opts
    * @returns {boolean} Success status
    */
-  function injectSaveDCCard({ moveName, characterName, saveType, saveDC }) {
+  function injectSaveDCCard({ moveName, characterName, saveType, saveDC, damageDice, moveType, moveTime, moveRange, moveDuration, moveDescription }) {
     const charDisplay = characterName
       ? (typeof characterName === 'object' ? characterName.character : characterName)
       : null;
 
     // Embed character name directly in the template name field to avoid /as encoding issues
     const cardName = charDisplay ? `${charDisplay} | ${moveName}` : moveName;
-    const message = `&{template:default} {{name=${cardName}}} {{${saveType} Save DC=${saveDC}}}`;
+    let message = `&{template:default} {{name=${cardName}}} {{${saveType} Save DC=${saveDC}}}`;
+    if (damageDice) message += ` {{Damage (${damageDice})=[[${damageDice}]]}}`;
+    if (moveType) message += ` {{Type=${moveType}}}`;
+    if (moveTime) message += ` {{Time=${moveTime}}}`;
+    if (moveRange) message += ` {{Range=${moveRange}}}`;
+    if (moveDuration) message += ` {{Duration=${moveDuration}}}`;
+    if (moveDescription) message += ` {{Effect=${moveDescription}}}`;
 
     const chatInput = findChatInput();
     if (!chatInput) {
@@ -216,140 +222,56 @@ const Roll20Integration = (() => {
   }
 
   /**
-   * Double the damage dice formula for critical hits
-   * @param {string} damageDice - Original damage formula (e.g., "1d6", "2d8+3")
-   * @returns {string} Doubled formula (e.g., "2d6", "4d8+3")
+   * After sending an attack card, watch for the Roll20 message to appear and,
+   * if it was a natural 20, send a follow-up card with the bonus crit dice.
+   * (Damage is already embedded in the first card; this only adds the extra dice.)
    */
-  function doubleDamageForCritical(damageDice) {
-    // Match pattern: "XdY" or "XdY+Z" or "XdY-Z"
-    const match = damageDice.match(/^(\d+)d(\d+)(.*?)$/);
-    if (!match) return damageDice; // Return unchanged if pattern doesn't match
+  function watchForCritBonus({ cardName, damageDice }) {
+    // Extract only the dice part (e.g. "2d8+3" → "2d8") — crit bonus has no modifier
+    const bonusDice = damageDice.match(/^(\d+d\d+)/)?.[1];
+    if (!bonusDice) return;
 
-    const [, numDice, diceType, modifier] = match;
-    const doubled = parseInt(numDice) * 2;
-    const result = `${doubled}d${diceType}${modifier}`;
-    
-    log(`✓ Doubled damage: ${damageDice} → ${result}`);
-    return result;
-  }
+    // Snapshot BEFORE sending
+    const rollsBefore = document.querySelectorAll('.inlinerollresult').length;
 
-  /**
-   * Observe the chat DOM for the attack roll result, then immediately roll damage.
-   *
-   * A MutationObserver is used instead of a fixed setTimeout because Roll20's
-   * render time is unpredictable. The observer fires the moment the attack
-   * message appears, checks for a natural 20, and rolls the correct damage.
-   *
-   * Falls back to rolling without critical doubling if no message appears
-   * within 5 seconds.
-   *
-   * @param {Object} opts
-   * @param {string} opts.prefix      - "CharName | " or empty string
-   * @param {string} opts.moveName    - Name of the move (e.g. "Bubble")
-   * @param {string} opts.damageDice  - Base damage formula (e.g. "2d6+4")
-   */
-  function waitForAttackMessageThenRollDamage({ prefix, moveName, damageDice }) {
-    const chatContainer = document.querySelector('#textchat') ||
-                          document.querySelector('#chat') ||
-                          document.querySelector('.chat-container');
-
-    if (!chatContainer) {
-      log('⚠️ Chat container not found for observer, falling back to timeout');
-      setTimeout(() => rollDamage({ prefix, moveName, damageDice, isCritical: false }), 800);
-      return;
-    }
-
-    // Safety: give up after 5 seconds
     const giveUpTimer = setTimeout(() => {
       observer.disconnect();
-      log('⚠️ Timed out waiting for attack message, rolling damage without critical check');
-      rollDamage({ prefix, moveName, damageDice, isCritical: false });
+      const rollsNow = document.querySelectorAll('.inlinerollresult').length;
+      log(`⚠️ watchForCritBonus timed out. inlinerollresult: ${rollsBefore}→${rollsNow}`);
     }, 5000);
 
-    // Count existing messages before the attack is sent
-    const messagesBefore = chatContainer.querySelectorAll('.message').length;
-
     const observer = new MutationObserver(() => {
-      // Wait for a NEW message to appear after the attack was sent
-      const messages = chatContainer.querySelectorAll('.message');
-      if (messages.length <= messagesBefore) return;
-
-      const attackMsg = messages[messagesBefore]; // first new message = attack result
+      const allRolls = document.querySelectorAll('.inlinerollresult');
+      if (allRolls.length <= rollsBefore) return;
 
       observer.disconnect();
       clearTimeout(giveUpTimer);
 
-      log(`Attack message found (template or /roll)`);
+      // Walk up from the first new roll to find its containing table,
+      // then check only the first tbody tr — that's the Attack row.
+      // fullcrit on later rows = max damage dice, not a crit.
+      const attackRoll = [...allRolls][rollsBefore];
+      const table = attackRoll?.closest('table');
+      const firstTdRoll = table?.querySelector('tbody tr:first-child .inlinerollresult');
+      const isCrit = firstTdRoll?.classList.contains('fullcrit') ?? false;
 
-      const isCritical = checkMessageForCritical(attackMsg);
-      log(`Critical hit check result: ${isCritical}`);
-
-      rollDamage({ prefix, moveName, damageDice, isCritical });
+      log(`Crit check: fullcrit in first tbody td = ${isCrit}`);
+      if (isCrit) sendCritBonus(cardName, bonusDice);
     });
 
-    observer.observe(chatContainer, { childList: true, subtree: true });
-    log('Waiting for attack message to appear in DOM...');
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
-  /**
-   * Check a specific message element for a natural 20 (critical)
-   * Only considers dice that were actually kept
-   * dropped dice (from advantage/disadvantage rolls)
-   * are ignored via the `.dropped` class that Roll20 adds to discarded dice.
-   * @param {HTMLElement} messageEl
-   * @returns {boolean}
-   */
-  function checkMessageForCritical(messageEl) {
-    // --- Old /roll format: .diceroll.d20 ---
-    const diceRolls = messageEl.querySelectorAll('.diceroll.d20');
-    log(`Found ${diceRolls.length} d20 diceroll elements`);
-    for (const roll of diceRolls) {
-      if (roll.classList.contains('dropped')) continue;
-      const rollText = roll.textContent.trim();
-      if (roll.classList.contains('critsuccess') || rollText === '20') {
-        log('✓✓✓ CRITICAL HIT DETECTED (diceroll) ✓✓✓');
-        return true;
-      }
-    }
-
-    // --- Template format: .inlinerollresult ---
-    const inlineRolls = messageEl.querySelectorAll('.inlinerollresult');
-    log(`Found ${inlineRolls.length} inlinerollresult elements`);
-    for (const roll of inlineRolls) {
-      if (roll.classList.contains('critSuccess') || roll.classList.contains('critsuccess')) {
-        log('✓✓✓ CRITICAL HIT DETECTED (inline roll) ✓✓✓');
-        return true;
-      }
-    }
-
-    log('❌ No critical hit detected');
-    return false;
-  }
-
-  /**
-   * Roll damage (used after critical check)
-   * @param {Object} opts - { prefix, moveName, damageDice, isCritical }
-   */
-  function rollDamage({ prefix, moveName, damageDice, isCritical }) {
+  function sendCritBonus(cardName, bonusDice) {
     const chatInput = findChatInput();
     if (!chatInput) return;
-
-    const finalDamageDice = isCritical ? doubleDamageForCritical(damageDice) : damageDice;
-    const fieldLabel = isCritical ? `CRITICAL Damage` : `Damage (${finalDamageDice})`;
-    // prefix is "CharName | " — strip trailing separator for the card name
-    const cardName = prefix
-      ? `${prefix.replace(/ \| $/, '')} | ${moveName}`
-      : moveName;
-    const command = `&{template:default} {{name=${cardName}}} {{${fieldLabel}=[[${finalDamageDice}]]}}`;
-
-    log(`Rolling damage: ${command}`);
-    chatInput.value = command;
+    const cmd = `&{template:default} {{name=${cardName}}} {{Crit Bonus (${bonusDice})=[[${bonusDice}]]}}`;
+    chatInput.value = cmd;
     chatInput.dispatchEvent(new Event('input', { bubbles: true }));
     chatInput.dispatchEvent(new Event('change', { bubbles: true }));
-    const sendButton = document.querySelector('#chatSendBtn');
-    if (sendButton) sendButton.click();
-
-    log('✓ Damage roll injected:', command);
+    const sendBtn = document.querySelector('#chatSendBtn');
+    if (sendBtn) sendBtn.click();
+    log('✓ Crit bonus damage sent:', cmd);
   }
 
   /**
@@ -357,7 +279,7 @@ const Roll20Integration = (() => {
    * @param {Object} opts
    * @returns {boolean} Success status
    */
-  function injectAttackTemplate({ moveName, characterName, toHit, advantage, disadvantage }) {
+  function injectAttackTemplate({ moveName, characterName, toHit, damageDice, advantage, disadvantage, moveType, moveTime, moveRange, moveDuration, moveDescription }) {
     const chatInput = findChatInput();
     if (!chatInput) return false;
 
@@ -377,7 +299,13 @@ const Roll20Integration = (() => {
       fieldLabel = 'Attack (DIS)';
     }
 
-    const command = `&{template:default} {{name=${cardName}}} {{${fieldLabel}=[[${diceFormula}]]}}`;
+    let command = `&{template:default} {{name=${cardName}}} {{${fieldLabel}=[[${diceFormula}]]}}`;
+    if (damageDice) command += ` {{Damage (${damageDice})=[[${damageDice}]]}}`;
+    if (moveType) command += ` {{Type=${moveType}}}`;
+    if (moveTime) command += ` {{Time=${moveTime}}}`;
+    if (moveRange) command += ` {{Range=${moveRange}}}`;
+    if (moveDuration) command += ` {{Duration=${moveDuration}}}`;
+    if (moveDescription) command += ` {{Effect=${moveDescription}}}`;
 
     chatInput.value = command;
     chatInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -385,8 +313,45 @@ const Roll20Integration = (() => {
     const sendButton = document.querySelector('#chatSendBtn');
     if (sendButton) sendButton.click();
 
+    // Watch for a natural 20 and send bonus crit dice if needed
+    if (damageDice) {
+      watchForCritBonus({ cardName, damageDice });
+    }
+
     log('✓ Attack template injected:', command);
     showNotification('✓ Attack injected into Roll20 chat', 'success');
+    return true;
+  }
+
+  /**
+   * Send an info-only card (move with no attack/save roll)
+   * @param {Object} opts
+   * @returns {boolean} Success status
+   */
+  function injectInfoCard({ moveName, characterName, moveType, moveTime, moveRange, moveDuration, moveDescription }) {
+    const chatInput = findChatInput();
+    if (!chatInput) return false;
+
+    const charDisplay = characterName
+      ? (typeof characterName === 'object' ? characterName.character : characterName)
+      : null;
+    const cardName = charDisplay ? `${charDisplay} | ${moveName}` : moveName;
+
+    let command = `&{template:default} {{name=${cardName}}}`;
+    if (moveType) command += ` {{Type=${moveType}}}`;
+    if (moveTime) command += ` {{Time=${moveTime}}}`;
+    if (moveRange) command += ` {{Range=${moveRange}}}`;
+    if (moveDuration) command += ` {{Duration=${moveDuration}}}`;
+    if (moveDescription) command += ` {{Effect=${moveDescription}}}`;
+
+    chatInput.value = command;
+    chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+    chatInput.dispatchEvent(new Event('change', { bubbles: true }));
+    const sendButton = document.querySelector('#chatSendBtn');
+    if (sendButton) sendButton.click();
+
+    log(`✓ Info card sent: ${moveName}`);
+    showNotification(`✓ ${moveName} sent to chat`, 'success');
     return true;
   }
 
@@ -428,32 +393,34 @@ const Roll20Integration = (() => {
             disadvantage,
             isSaveMove,
             saveType,
-            saveDC
+            saveDC,
+            moveType,
+            moveTime,
+            moveRange,
+            moveDuration,
+            moveDescription
           } = request.data;
           
           const charDisplay = characterName
             ? (typeof characterName === 'object' ? characterName.character : characterName)
             : null;
-          const prefix = charDisplay ? `${charDisplay} | ` : '';
 
           let success = true;
 
-          // SAVE DC move: Inject card directly into Roll20 DOM (no /roll)
+          // SAVE DC move
           if (isSaveMove && saveDC !== null && saveDC !== undefined) {
             log(`✓ Processing SAVE move: ${saveType} Save DC ${saveDC}`);
-            success = injectSaveDCCard({ moveName, characterName, saveType, saveDC });
+            success = injectSaveDCCard({ moveName, characterName, saveType, saveDC, damageDice, moveType, moveTime, moveRange, moveDuration, moveDescription });
           }
-          // ATTACK move: Roll to-hit using template card
+          // ATTACK move
           else if (toHit !== null && toHit !== undefined) {
             log(`✓ Processing ATTACK move: to-hit ${toHit}`);
-            success = injectAttackTemplate({ moveName, characterName, toHit, advantage, disadvantage });
+            success = injectAttackTemplate({ moveName, characterName, toHit, damageDice, advantage, disadvantage, moveType, moveTime, moveRange, moveDuration, moveDescription });
           }
-
-          // Roll damage for both attack and save moves
-          if (damageDice) {
-            waitForAttackMessageThenRollDamage({
-              prefix, moveName, damageDice,
-            });
+          // INFO-only move
+          else {
+            log(`✓ Processing INFO move: ${moveName}`);
+            success = injectInfoCard({ moveName, characterName, moveType, moveTime, moveRange, moveDuration, moveDescription });
           }
 
           sendResponse({ success });

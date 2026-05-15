@@ -202,7 +202,7 @@ let mutationObserverInstance = null;
 
 function setupMutationObserver() {
   const observer = new MutationObserver((mutations) => {
-    // Desconectar o observer para evitar capturar eventos durante reinjeção
+    // Disconnect the observer to avoid capturing events during reinjection
     observer.disconnect();
     
     // Debounce reinjection
@@ -223,7 +223,7 @@ function setupMutationObserver() {
           attributes: false
         });
       }
-    }, 500); // Reduzir debounce de 1000 para 500ms
+    }, 500);
   });
 
   observer.observe(document.body, {
@@ -237,7 +237,7 @@ function setupMutationObserver() {
   log('Mutation observer activated');
 }
 
-// Função para parar o observer se necessário
+// Function to stop the mutation observer
 function stopMutationObserver() {
   if (mutationObserverInstance) {
     mutationObserverInstance.disconnect();

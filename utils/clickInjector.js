@@ -306,68 +306,90 @@ const ClickInjector = (() => {
   }
 
   /**
-   * Find and inject attack handlers on move names.
-   * Source: MoveDetails.svelte + MoveStatsInfo.svelte
+   * Find and inject click handlers on all move names.
+   * Handles attack, save DC and info-only moves (no roll).
+   * Source: MoveDetails.svelte
    * Structure:
-   *   <div class="hrow ..."><span class="flex-span bold"><a href="...">Quick Attack</a></span></div>
-   *   <dl class="move-stats-info">
-   *     <div><dt>Attack</dt><dd>+7 to Hit</dd></div>
-   *     <div><dt>Damage</dt><dd>1d6</dd></div>
-   *   </dl>
-   * 
-   * Or for SAVE moves:
-   *     <div><dt>DEX Save</dt><dd>DC 16</dd></div>
-   *     <div><dt>Damage</dt><dd>2d8+8</dd></div>
+   *   div.vstack (outer card)
+   *     div.vstack.bg-by-type (coloured header)
+   *       div.hrow > span.flex-span.bold > a  ← nameLink
+   *       div.hrow.tiny-font > span.flex-span  ← type
+   *     div.move-stats > dl.move-stats-info    ← only for attack/save/damage moves
+   *     div.smaller-font                       ← Power/Range/Time/Duration/Description
    */
   function injectAttackHandlers() {
     let injected = 0;
 
-    // Each move block has a .move-stats-info dl with Attack/Save and/or Damage divs
-    document.querySelectorAll('dl.move-stats-info').forEach(statsDl => {
-      let toHit = null;
-      let saveDC = null;
-      let saveType = null;
-      let damageDice = null;
-
-      statsDl.querySelectorAll('div').forEach(div => {
-        const dt = div.querySelector('dt');
-        const dd = div.querySelector('dd');
-        if (!dt || !dd) return;
-        const label = dt.innerText.trim().toLowerCase();
-        
-        // Check for Attack
-        if (label === 'attack') {
-          const match = dd.innerText.match(/([+-]?\d+)/);
-          if (match) toHit = parseInt(match[1]);
-        } 
-        // Check for Save (e.g. "DEX Save", "STR Save")
-        else if (label.includes('save')) {
-          const saveMatch = label.match(/(str|dex|con|int|wis|cha)/i);
-          if (saveMatch) {
-            saveType = saveMatch[1].toUpperCase();
-            const dcMatch = dd.innerText.match(/DC\s*(\d+)/i);
-            if (dcMatch) saveDC = parseInt(dcMatch[1]);
-          }
-        }
-        // Damage or healing
-        else if (label === 'damage' || label === 'healing') {
-          damageDice = dd.innerText.trim()
-            .replace(/\s+/g, '')
-            .replace(/[^0-9d+\-*\/().]/gi, '');
-        }
-      });
-
-      // No attack/save stat = move without a roll, skip
-      if (toHit === null && saveDC === null) return;
-
-      // Find the move name link
-      const moveContainer = statsDl.closest('.vstack');
-      if (!moveContainer) return;
-      const nameLink = moveContainer.querySelector('.flex-span.bold a, .flex-span a');
-      if (!nameLink) return;
+    // Entry point: every move name link
+    document.querySelectorAll('.flex-span.bold a').forEach(nameLink => {
       if (nameLink.classList.contains(ROLLABLE_CLASS)) return;
 
+      // Walk up: nameLink → span → div.hrow → div.vstack(inner) → div.vstack(outer)
+      const innerVstack = nameLink.closest('.vstack');
+      if (!innerVstack) return;
+      const moveContainer = innerVstack.parentElement?.classList?.contains('vstack')
+        ? innerVstack.parentElement
+        : innerVstack;
+
+      // Guard: must have a .smaller-font section to be a move card (avoids false positives)
+      if (!moveContainer.querySelector('.smaller-font')) return;
+
       const moveName = nameLink.innerText.trim();
+      if (!moveName) return;
+
+      // Extract stats from dl.move-stats-info (only present for attack/save/damage moves)
+      let toHit = null, saveDC = null, saveType = null, damageDice = null;
+      const statsDl = moveContainer.querySelector('dl.move-stats-info');
+      if (statsDl) {
+        statsDl.querySelectorAll('div').forEach(div => {
+          const dt = div.querySelector('dt');
+          const dd = div.querySelector('dd');
+          if (!dt || !dd) return;
+          const label = dt.innerText.trim().toLowerCase();
+
+          if (label === 'attack') {
+            const match = dd.innerText.match(/([+-]?\d+)/);
+            if (match) toHit = parseInt(match[1]);
+          } else if (label.includes('save')) {
+            const saveMatch = label.match(/(str|dex|con|int|wis|cha)/i);
+            if (saveMatch) {
+              saveType = saveMatch[1].toUpperCase();
+              const dcMatch = dd.innerText.match(/DC\s*(\d+)/i);
+              if (dcMatch) saveDC = parseInt(dcMatch[1]);
+            }
+          } else if (label === 'damage' || label === 'healing') {
+            damageDice = dd.innerText.trim()
+              .replace(/\s+/g, '')
+              .replace(/[^0-9d+\-*\/().]/gi, '');
+          }
+        });
+      }
+
+      // Extract move metadata
+      let moveType = null;
+      const typeRow = moveContainer.querySelector('.hrow.tiny-font');
+      if (typeRow) {
+        const typeSpan = typeRow.querySelector('.flex-span');
+        if (typeSpan) moveType = typeSpan.innerText.trim();
+      }
+
+      let moveTime = null, moveRange = null, moveDuration = null, moveDescription = null;
+      const detailsSection = moveContainer.querySelector('.smaller-font');
+      if (detailsSection) {
+        detailsSection.querySelectorAll('dt').forEach(dt => {
+          const label = dt.innerText.trim().toLowerCase();
+          const dd = dt.nextElementSibling;
+          if (!dd) return;
+          const val = dd.innerText.trim();
+          if (label === 'time') moveTime = val;
+          else if (label === 'range') moveRange = val;
+          else if (label === 'duration') moveDuration = val;
+        });
+        const descEl = detailsSection.querySelector('.description');
+        if (descEl) {
+          moveDescription = descEl.innerText.trim().replace(/\s+/g, ' ');
+        }
+      }
 
       nameLink.classList.add(ROLLABLE_CLASS);
       addHoverEffect(nameLink);
@@ -378,8 +400,7 @@ const ClickInjector = (() => {
 
         const rollContext = createRollContext(nameLink, 'attack', e);
         const characterName = DataParser.getCharacterName();
-        
-        // Retrieve bonuses from storage
+
         chrome.runtime.sendMessage(
           { type: 'GET_BONUSES' },
           (bonusResponse) => {
@@ -387,76 +408,58 @@ const ClickInjector = (() => {
               log('⚠ Could not retrieve bonuses:', chrome.runtime.lastError);
               bonusResponse = { attackBonus: 0, saveDcBonus: 0 };
             }
-            
+
             const attackBonus = bonusResponse?.attackBonus || 0;
             const saveDcBonus = bonusResponse?.saveDcBonus || 0;
-            
-            // Handle SAVE moves
+
+            const commonData = {
+              moveName,
+              characterName,
+              damageDice,
+              moveType,
+              moveTime,
+              moveRange,
+              moveDuration,
+              moveDescription,
+              advantage: rollContext.advantage,
+              disadvantage: rollContext.disadvantage
+            };
+
             if (saveDC !== null) {
               const totalDC = saveDC + saveDcBonus;
               if (saveDcBonus !== 0) {
                 log(`✓ Adding save DC bonus: ${saveDC} + ${saveDcBonus} = ${totalDC}`);
               }
-              
               chrome.runtime.sendMessage({
                 type: 'ATTACK_REQUEST',
-                data: {
-                  moveName,
-                  characterName,
-                  isSaveMove: true,
-                  saveType: saveType,
-                  saveDC: totalDC,
-                  baseSaveDC: saveDC,
-                  saveDcBonus: saveDcBonus,
-                  damageDice,
-                  advantage: rollContext.advantage,
-                  disadvantage: rollContext.disadvantage
-                }
+                data: { ...commonData, isSaveMove: true, saveType, saveDC: totalDC, baseSaveDC: saveDC, saveDcBonus }
               }, response => {
-                if (chrome.runtime.lastError) {
-                  log('❌ Chrome error:', chrome.runtime.lastError.message);
-                  showNotification(`✗ ${chrome.runtime.lastError.message}`, 'error');
-                  return;
-                }
-                if (response && response.success) {
-                  showNotification(`💨 ${moveName} rolled!`, 'success');
-                } else {
-                  showNotification(`✗ ${response?.error || 'Unknown error'}`, 'error');
-                }
+                if (chrome.runtime.lastError) { showNotification(`✗ ${chrome.runtime.lastError.message}`, 'error'); return; }
+                if (response?.success) showNotification(`💨 ${moveName} rolled!`, 'success');
+                else showNotification(`✗ ${response?.error || 'Unknown error'}`, 'error');
               });
-            }
-            // Handle ATTACK moves
-            else if (toHit !== null) {
+            } else if (toHit !== null) {
               const totalToHit = toHit + attackBonus;
-              
               if (attackBonus !== 0) {
                 log(`✓ Adding attack bonus: ${toHit} + ${attackBonus} = ${totalToHit}`);
               }
-              
               chrome.runtime.sendMessage({
                 type: 'ATTACK_REQUEST',
-                data: {
-                  moveName,
-                  characterName,
-                  isSaveMove: false,
-                  toHit: totalToHit,
-                  baseToHit: toHit,
-                  attackBonus: attackBonus,
-                  damageDice,
-                  advantage: rollContext.advantage,
-                  disadvantage: rollContext.disadvantage
-                }
+                data: { ...commonData, isSaveMove: false, toHit: totalToHit, baseToHit: toHit, attackBonus }
               }, response => {
-                if (chrome.runtime.lastError) {
-                  log('❌ Chrome error:', chrome.runtime.lastError.message);
-                  showNotification(`✗ ${chrome.runtime.lastError.message}`, 'error');
-                  return;
-                }
-                if (response && response.success) {
-                  showNotification(`⚔ ${moveName} rolled!`, 'success');
-                } else {
-                  showNotification(`✗ ${response?.error || 'Unknown error'}`, 'error');
-                }
+                if (chrome.runtime.lastError) { showNotification(`✗ ${chrome.runtime.lastError.message}`, 'error'); return; }
+                if (response?.success) showNotification(`⚔ ${moveName} rolled!`, 'success');
+                else showNotification(`✗ ${response?.error || 'Unknown error'}`, 'error');
+              });
+            } else {
+              // Info-only move: no attack/save roll, just send the card
+              chrome.runtime.sendMessage({
+                type: 'ATTACK_REQUEST',
+                data: { ...commonData, isSaveMove: false, toHit: null, saveDC: null }
+              }, response => {
+                if (chrome.runtime.lastError) { showNotification(`✗ ${chrome.runtime.lastError.message}`, 'error'); return; }
+                if (response?.success) showNotification(`✓ ${moveName} sent!`, 'success');
+                else showNotification(`✗ ${response?.error || 'Unknown error'}`, 'error');
               });
             }
           }
@@ -466,8 +469,10 @@ const ClickInjector = (() => {
       injected++;
       if (saveDC !== null) {
         log(`✓ Save move handler injected: ${moveName} (${saveType} Save DC=${saveDC}, damage=${damageDice})`);
-      } else {
+      } else if (toHit !== null) {
         log(`✓ Attack handler injected: ${moveName} (toHit=${toHit}, damage=${damageDice})`);
+      } else {
+        log(`✓ Info-only handler injected: ${moveName}`);
       }
     });
 
