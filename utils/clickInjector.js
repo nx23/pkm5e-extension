@@ -8,75 +8,18 @@ const ClickInjector = (() => {
   const HOVER_CLASS = 'poke5e-hover';
 
   /**
-   * Create a roll context from the clicked element
-   * @param {HTMLElement} element - The element that was clicked
-   * @param {string} rollType - Type of roll (save, skill, ability, attack)
-   * @param {MouseEvent} event - The click event (para detectar Shift/Ctrl)
-   * @returns {Object} Roll context
+   * Read the advantage/disadvantage state for a click.
+   * Uses the click event AND the body classes set by the key listeners in poke5e.js.
+   * The body class is a more reliable source when the browser intercepts
+   * Shift+Click on <a> elements (e.g. "open in new window" behaviour in Chrome).
+   * @param {MouseEvent} event - The click event
+   * @returns {{advantage: boolean, disadvantage: boolean}}
    */
-  function createRollContext(element, rollType, event) {
-    const text = element.innerText.trim();
-    let stat = null;
-    let modifier = 0;
-
-    // Read modifier state from the click event AND from body classes (set by key listeners
-    // in poke5e.js). The body class is a more reliable source when the browser intercepts
-    // Shift+Click on <a> elements (e.g. "open in new window" behaviour in Chrome).
-    const hasAdvantage    = (event && event.shiftKey) || document.body.classList.contains('poke5e-advantage');
-    const hasDisadvantage = (event && event.ctrlKey)  || document.body.classList.contains('poke5e-disadvantage');
-
-    // Determine which ability/stat
-    const abilityMatch = text.match(/(STR|DEX|CON|INT|WIS|CHA)/i);
-    if (abilityMatch) {
-      stat = abilityMatch[1].toUpperCase();
-    }
-
-    // Parse modifier from element text first
-    const modifierMatch = text.match(/([+-]\d+)/);
-    if (modifierMatch) {
-      modifier = parseInt(modifierMatch[1]);
-    } else if (stat && rollType === 'check') {
-      // Ability check: get modifier from parsed ability scores
-      const abilities = DataParser.parseAbilityScores();
-      if (abilities && abilities[stat] !== undefined) {
-        modifier = abilities[stat].modifier;
-        log(`✓ Got ${stat} check modifier from parser: ${modifier}`);
-      }
-    } else if (stat && rollType === 'save') {
-      // If no modifier found in text, try to get from parsed saves
-      const saves = DataParser.parseSaves();
-      if (saves && saves[stat] !== undefined) {
-        modifier = saves[stat];
-        log(`✓ Got ${stat} save modifier from parser: ${modifier}`);
-      }
-    } else if (rollType === 'skill') {
-      // For skills, try to get from parsed skills
-      const skills = DataParser.parseSkills();
-      if (skills) {
-        // Find the skill in the parsed data
-        for (const skillName in skills) {
-          if (text.includes(skillName)) {
-            modifier = skills[skillName];
-            stat = skillName; // Set stat to skill name for better logging
-            log(`✓ Got ${skillName} skill modifier from parser: ${modifier}`);
-            break;
-          }
-        }
-      }
-    }
-
-    const context = {
-      rollType: rollType,
-      stat: stat,
-      modifier: modifier,
-      label: text,
-      timestamp: Date.now(),
-      advantage: hasAdvantage,
-      disadvantage: hasDisadvantage
+  function getAdvantageState(event) {
+    return {
+      advantage:    !!(event && event.shiftKey) || document.body.classList.contains('poke5e-advantage'),
+      disadvantage: !!(event && event.ctrlKey)  || document.body.classList.contains('poke5e-disadvantage')
     };
-
-    log('Created roll context:', context);
-    return context;
   }
 
   /**
@@ -235,8 +178,7 @@ const ClickInjector = (() => {
       addHoverEffect(dt);
       dt.addEventListener('click', (e) => {
         e.stopPropagation();
-        const rollContext = createRollContext(dt, 'check', e);
-        sendRollRequest({ rollType: 'check', stat, modifier, ...rollContext });
+        sendRollRequest({ rollType: 'check', stat, modifier, ...getAdvantageState(e) });
       });
       injected++;
       log(`✓ Ability check handler injected: ${stat} (${modifier >= 0 ? '+' : ''}${modifier})`);
@@ -265,8 +207,7 @@ const ClickInjector = (() => {
       addHoverEffect(dt);
       dt.addEventListener('click', (e) => {
         e.stopPropagation();
-        const rollContext = createRollContext(dt, 'save', e);
-        sendRollRequest({ rollType: 'save', stat, modifier, ...rollContext });
+        sendRollRequest({ rollType: 'save', stat, modifier, ...getAdvantageState(e) });
       });
       injected++;
       log(`✓ Save handler injected: ${stat} (${modifier >= 0 ? '+' : ''}${modifier})`);
@@ -295,8 +236,7 @@ const ClickInjector = (() => {
       addHoverEffect(dt);
       dt.addEventListener('click', (e) => {
         e.stopPropagation();
-        const rollContext = createRollContext(dt, 'skill', e);
-        sendRollRequest({ rollType: 'skill', stat: skill, modifier, ...rollContext });
+        sendRollRequest({ rollType: 'skill', stat: skill, modifier, ...getAdvantageState(e) });
       });
       injected++;
       log(`✓ Skill handler injected: ${skill} (${modifier >= 0 ? '+' : ''}${modifier})`);
@@ -397,7 +337,7 @@ const ClickInjector = (() => {
         e.preventDefault();
         e.stopPropagation();
 
-        const rollContext = createRollContext(nameLink, 'attack', e);
+        const { advantage, disadvantage } = getAdvantageState(e);
         const characterName = DataParser.getCharacterName();
 
         chrome.runtime.sendMessage(
@@ -420,8 +360,8 @@ const ClickInjector = (() => {
               moveRange,
               moveDuration,
               moveDescription,
-              advantage: rollContext.advantage,
-              disadvantage: rollContext.disadvantage
+              advantage,
+              disadvantage
             };
 
             if (saveDC !== null) {
@@ -509,7 +449,7 @@ const ClickInjector = (() => {
   return {
     injectAllHandlers,
     reinjectHandlers,
-    createRollContext,
+    getAdvantageState,
     sendRollRequest,
     showNotification
   };

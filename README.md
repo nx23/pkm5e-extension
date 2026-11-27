@@ -334,7 +334,7 @@ The extension uses **CSS selectors** to identify and interact with poke5e.app el
 
 After injecting an attack card, `watchForCritBonus` sets up a MutationObserver:
 
-1. Waits for the Roll20 template card to appear in the DOM (up to 5 s timeout)
+1. Waits for **its own** template card to appear in the DOM (up to 10 s timeout) — the card's title must match the attack (e.g. `Scyther | Quick Attack`) and its first row must be the attack row (`Attack`, `Attack (ADV)` or `Attack (DIS)`); cards from other players are ignored
 2. Checks if the first `tbody` row's inline-roll result has the `.fullcrit` class (natural 20)
 3. If so, sends a follow-up `&{template:default}` card with doubled damage dice:  
    `{{name=Scyther | Quick Attack}} {{Crit Bonus (1d6)=[[1d6]]}}`

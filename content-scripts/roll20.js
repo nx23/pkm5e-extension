@@ -188,19 +188,36 @@ const Roll20Integration = (() => {
   }
 
   /**
-   * After sending an attack card, watch for the Roll20 message to appear and,
+   * After sending an attack card, watch for THAT card to appear in Roll20 chat and,
    * if it was a natural 20, send a follow-up card with the bonus crit dice.
    * (Damage is already embedded in the first card; this only adds the extra dice.)
+   *
+   * Only a card whose title equals cardName (e.g. "Scyther | Quick Attack") and whose
+   * first row is fieldLabel (e.g. "Attack (ADV)") counts. Cards from other players,
+   * or other rolls that land in chat first, are ignored and the watcher keeps waiting.
    */
-  function watchForCritBonus({ cardName, damageDice }) {
+  function watchForCritBonus({ cardName, fieldLabel, damageDice }) {
     // Extract only the dice part (e.g. "2d8+3" → "2d8") — crit bonus has no modifier
     const bonusDice = damageDice.match(/^(\d+d\d+)/)?.[1];
     if (!bonusDice) return;
 
+    const normalize = (text) => (text || '').replace(/\s+/g, ' ').trim();
+    const expectedName = normalize(cardName);
+    const expectedLabel = normalize(fieldLabel);
+
+    // Is this <table> the card we just sent?
+    function isOurCard(table) {
+      // Roll20's default template renders {{name=...}} as the table <caption>
+      const title = normalize(table.querySelector('caption')?.textContent);
+      if (title !== expectedName) return false;
+      const firstLabel = normalize(table.querySelector('tbody tr:first-child td:first-child')?.textContent);
+      return firstLabel === expectedLabel;
+    }
+
     const giveUpTimer = setTimeout(() => {
       observer.disconnect();
-      log(`⚠️ watchForCritBonus timed out (no template card appeared)`);
-    }, 5000);
+      log(`⚠️ watchForCritBonus timed out (our card "${cardName}" did not appear)`);
+    }, 10000);
 
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
@@ -214,6 +231,8 @@ const Roll20Integration = (() => {
             : [...(node.querySelectorAll?.('table') ?? [])];
 
           for (const table of tables) {
+            if (!isOurCard(table)) continue;
+
             // First tbody row = Attack field; fullcrit on it = natural 20
             const firstTdRoll = table.querySelector('tbody tr:first-child .inlinerollresult');
             if (!firstTdRoll) continue;
@@ -222,7 +241,7 @@ const Roll20Integration = (() => {
             clearTimeout(giveUpTimer);
 
             const isCrit = firstTdRoll.classList.contains('fullcrit');
-            log(`Crit check: fullcrit in first tbody td = ${isCrit}`);
+            log(`Crit check for "${cardName}": fullcrit = ${isCrit}`);
             if (isCrit) sendCritBonus(cardName, bonusDice);
             return;
           }
@@ -286,7 +305,7 @@ const Roll20Integration = (() => {
 
     // Watch for a natural 20 and send bonus crit dice if needed
     if (damageDice) {
-      watchForCritBonus({ cardName, damageDice });
+      watchForCritBonus({ cardName, fieldLabel, damageDice });
     }
 
     log('✓ Attack template injected:', command);
