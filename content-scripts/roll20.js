@@ -66,6 +66,15 @@ const Roll20Integration = (() => {
   }
 
   /**
+   * Template row that rolls a move's damage (or healing), e.g. " {{Damage (2d4+1)=[[2d4+1]]}}".
+   * damageDice is already filtered to dice characters by the poke5e side.
+   */
+  function damageRow(damageDice, damageLabel) {
+    const label = damageLabel === 'Healing' ? 'Healing' : 'Damage';
+    return ` {{${label} (${damageDice})=[[${damageDice}]]}}`;
+  }
+
+  /**
    * Put a command in the Roll20 chat box and press Send.
    * Only works on the Roll20 game page, which has the chat Send button (#chatSendBtn).
    * On any other roll20.net page (forum, campaign details...) this fails, instead of
@@ -93,7 +102,7 @@ const Roll20Integration = (() => {
    * @param {Object} opts
    * @returns {boolean} Success status
    */
-  function injectSaveDCCard({ moveName, characterName, saveType, saveDC, damageDice, moveType, moveTime, moveRange, moveDuration, moveDescription }) {
+  function injectSaveDCCard({ moveName, characterName, saveType, saveDC, damageDice, damageLabel, moveType, moveTime, moveRange, moveDuration, moveDescription }) {
     const charDisplay = characterName
       ? (typeof characterName === 'object' ? characterName.character : characterName)
       : null;
@@ -102,7 +111,7 @@ const Roll20Integration = (() => {
     const cardName = sanitizeForTemplate(charDisplay ? `${charDisplay} | ${moveName}` : moveName);
     const safeSaveType = sanitizeForTemplate(saveType);
     let message = `&{template:default} {{name=${cardName}}} {{${safeSaveType} Save DC=${saveDC}}}`;
-    if (damageDice) message += ` {{Damage (${damageDice})=[[${damageDice}]]}}`;
+    if (damageDice) message += damageRow(damageDice, damageLabel);
     if (moveType) message += ` {{Type=${sanitizeForTemplate(moveType)}}}`;
     if (moveTime) message += ` {{Time=${sanitizeForTemplate(moveTime)}}}`;
     if (moveRange) message += ` {{Range=${sanitizeForTemplate(moveRange)}}}`;
@@ -271,7 +280,7 @@ const Roll20Integration = (() => {
    * @param {Object} opts
    * @returns {boolean} Success status
    */
-  function injectAttackTemplate({ moveName, characterName, toHit, damageDice, advantage, disadvantage, moveType, moveTime, moveRange, moveDuration, moveDescription }) {
+  function injectAttackTemplate({ moveName, characterName, toHit, damageDice, damageLabel, advantage, disadvantage, moveType, moveTime, moveRange, moveDuration, moveDescription }) {
     const charDisplay = characterName
       ? (typeof characterName === 'object' ? characterName.character : characterName)
       : null;
@@ -289,7 +298,7 @@ const Roll20Integration = (() => {
     }
 
     let command = `&{template:default} {{name=${cardName}}} {{${fieldLabel}=[[${diceFormula}]]}}`;
-    if (damageDice) command += ` {{Damage (${damageDice})=[[${damageDice}]]}}`;
+    if (damageDice) command += damageRow(damageDice, damageLabel);
     if (moveType) command += ` {{Type=${sanitizeForTemplate(moveType)}}}`;
     if (moveTime) command += ` {{Time=${sanitizeForTemplate(moveTime)}}}`;
     if (moveRange) command += ` {{Range=${sanitizeForTemplate(moveRange)}}}`;
@@ -313,13 +322,15 @@ const Roll20Integration = (() => {
    * @param {Object} opts
    * @returns {boolean} Success status
    */
-  function injectInfoCard({ moveName, characterName, moveType, moveTime, moveRange, moveDuration, moveDescription }) {
+  function injectInfoCard({ moveName, characterName, damageDice, damageLabel, moveType, moveTime, moveRange, moveDuration, moveDescription }) {
     const charDisplay = characterName
       ? (typeof characterName === 'object' ? characterName.character : characterName)
       : null;
     const cardName = sanitizeForTemplate(charDisplay ? `${charDisplay} | ${moveName}` : moveName);
 
     let command = `&{template:default} {{name=${cardName}}}`;
+    // Auto-hit moves (e.g. Disarming Voice, Dream Eater) have no attack roll but still roll damage
+    if (damageDice) command += damageRow(damageDice, damageLabel);
     if (moveType) command += ` {{Type=${sanitizeForTemplate(moveType)}}}`;
     if (moveTime) command += ` {{Time=${sanitizeForTemplate(moveTime)}}}`;
     if (moveRange) command += ` {{Range=${sanitizeForTemplate(moveRange)}}}`;
@@ -368,6 +379,7 @@ const Roll20Integration = (() => {
             characterName, 
             toHit, 
             damageDice, 
+            damageLabel,
             advantage, 
             disadvantage,
             isSaveMove,
@@ -389,17 +401,17 @@ const Roll20Integration = (() => {
           // SAVE DC move
           if (isSaveMove && saveDC !== null && saveDC !== undefined) {
             log(`✓ Processing SAVE move: ${saveType} Save DC ${saveDC}`);
-            success = injectSaveDCCard({ moveName, characterName, saveType, saveDC, damageDice, moveType, moveTime, moveRange, moveDuration, moveDescription });
+            success = injectSaveDCCard({ moveName, characterName, saveType, saveDC, damageDice, damageLabel, moveType, moveTime, moveRange, moveDuration, moveDescription });
           }
           // ATTACK move
           else if (toHit !== null && toHit !== undefined) {
             log(`✓ Processing ATTACK move: to-hit ${toHit}`);
-            success = injectAttackTemplate({ moveName, characterName, toHit, damageDice, advantage, disadvantage, moveType, moveTime, moveRange, moveDuration, moveDescription });
+            success = injectAttackTemplate({ moveName, characterName, toHit, damageDice, damageLabel, advantage, disadvantage, moveType, moveTime, moveRange, moveDuration, moveDescription });
           }
           // INFO-only move
           else {
             log(`✓ Processing INFO move: ${moveName}`);
-            success = injectInfoCard({ moveName, characterName, moveType, moveTime, moveRange, moveDuration, moveDescription });
+            success = injectInfoCard({ moveName, characterName, damageDice, damageLabel, moveType, moveTime, moveRange, moveDuration, moveDescription });
           }
 
           sendResponse({ success, error: success ? undefined : NOT_A_GAME_TAB_ERROR });

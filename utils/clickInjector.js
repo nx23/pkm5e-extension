@@ -278,6 +278,7 @@ const ClickInjector = (() => {
 
       // Extract stats from dl.move-stats-info (only present for attack/save/damage moves)
       let toHit = null, saveDC = null, saveType = null, damageDice = null;
+      let damageLabel = 'Damage'; // 'Healing' for healing moves
       const statsDl = moveContainer.querySelector('dl.move-stats-info');
       if (statsDl) {
         statsDl.querySelectorAll('div').forEach(div => {
@@ -297,6 +298,7 @@ const ClickInjector = (() => {
               if (dcMatch) saveDC = parseInt(dcMatch[1]);
             }
           } else if (label === 'damage' || label === 'healing') {
+            damageLabel = label === 'healing' ? 'Healing' : 'Damage';
             damageDice = dd.innerText.trim()
               .replace(/\s+/g, '')
               .replace(/[^0-9d+\-*\/().]/gi, '');
@@ -355,6 +357,7 @@ const ClickInjector = (() => {
               moveName,
               characterName,
               damageDice,
+              damageLabel,
               moveType,
               moveTime,
               moveRange,
