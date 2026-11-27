@@ -82,6 +82,16 @@ No more copy-pasting formulas. Click a stat or move on your Pokemon sheet and th
 
 5. Visit `https://poke5e.app/` — you should see a "Pokemon 5e Roll20 Extension Active" notification
 
+### Firefox (from source)
+
+The same folder works in Firefox — there is one codebase and one `manifest.json` for both browsers.
+
+1. Open Firefox and go to `about:debugging#/runtime/this-firefox`
+2. Click **Load Temporary Add-on...** and select the `manifest.json` file
+3. Visit `https://poke5e.app/` as above
+
+Chrome uses `background.service_worker` and ignores `background.scripts`; Firefox does the opposite. Chrome may show a harmless warning about the Firefox-only `browser_specific_settings` key.
+
 
 ## Quick Start
 

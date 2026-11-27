@@ -3,8 +3,13 @@
  * Handles communication between Pokemon 5e and Roll20 tabs
  */
 
-// Import logger utilities
-importScripts('utils/logger.js');
+// Load logger utilities.
+// Chrome runs this file as a service worker, where importScripts() exists.
+// Firefox runs it as a background script (manifest "background.scripts"), where
+// importScripts() does NOT exist; there utils/logger.js is loaded by the manifest instead.
+if (typeof importScripts === 'function') {
+  importScripts('utils/logger.js');
+}
 
 /**
  * Find an active Roll20 tab
