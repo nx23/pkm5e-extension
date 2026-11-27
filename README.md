@@ -470,7 +470,10 @@ This extension is released under the **MIT License**, which allows you to freely
 
 ## Changelog
 
-### Version 1.4 (Current)
+### Version 1.4.1 (Current)
+- 🔒 Removed unused `scripting` and `activeTab` permissions (Chrome Web Store policy); the extension now only requests `storage` and `tabs` plus site access to poke5e.app and roll20.net
+
+### Version 1.4
 - ✨ **One codebase for Chrome and Firefox** — the separate `chrome` and `firefox` branches are merged; one `manifest.json` works in both browsers
 - ✨ **Auto-hit moves roll damage** — moves with damage but no attack or save DC (e.g. Disarming Voice, Dream Eater) now include the damage roll
 - ✨ **Healing label** — healing moves show a **Healing** field instead of **Damage**
