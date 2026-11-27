@@ -14,7 +14,7 @@ No more copy-pasting formulas. Click a stat or move on your Pokemon sheet and th
 
 ## Features
 
-### Version 1.3
+### Version 1.4
 
 **Rolls**
 - **Ability Checks** — Click ability scores to roll `1d20+modifier` (e.g. `Scyther | STR check`)
@@ -24,15 +24,17 @@ No more copy-pasting formulas. Click a stat or move on your Pokemon sheet and th
   - Attack field: `[[1d20+7]]`, Damage field: `[[1d6]]`
   - Card header: `Scyther | Quick Attack`
 - **Save DC Moves** — Click save-based moves to display a formatted card with DC and damage
-- **Info-only Moves** — Moves without a to-hit or DC display a summary card
+- **Auto-hit Moves** — Moves with damage but no to-hit or DC (e.g. Disarming Voice, Dream Eater) send a card with the damage roll
+- **Healing Moves** — Healing dice are rolled in a **Healing** field instead of **Damage**
+- **Info-only Moves** — Moves without any roll display a summary card
 
 **Critical Hits**
-- On a natural 20, damage dice are doubled automatically (e.g. `2d6+4` → `4d6+4`)
-- Detection uses Roll20's `.critsuccess` class via MutationObserver — no timing hacks
+- On a natural 20, a follow-up **Crit Bonus** card rolls the damage dice again (e.g. `2d6+4` → extra `2d6`)
+- Detection watches Roll20 chat for the extension's own attack card and checks Roll20's `.fullcrit` class; other players' cards are ignored
 
 **Advantage / Disadvantage**
-- Hold **Shift** before clicking → rolls `2d20kh1` (keep highest), label shows `ADV`
-- Hold **Ctrl** before clicking → rolls `2d20kl1` (keep lowest), label shows `DIS`
+- Hold **Shift** before clicking → rolls `2d20kh1` (keep highest), label shows `(ADV)`
+- Hold **Ctrl** before clicking → rolls `2d20kl1` (keep lowest), label shows `(DIS)`
 - The dice icon changes to green (Shift) or red (Ctrl) to indicate the current mode
 
 **Visual Feedback on poke5e.app**
@@ -51,9 +53,13 @@ No more copy-pasting formulas. Click a stat or move on your Pokemon sheet and th
 **SPA Navigation**
 - Automatically reinjects click handlers when you switch Pokémon on poke5e.app (no page reload needed)
 
-**Firefox Support**
-- Fully compatible with Firefox (Manifest V3)
-- The background service worker routes messages between poke5e.app and Roll20 content scripts; it performs no DOM access and responds quickly, minimising exposure to MV3 service worker lifecycle issues
+**Chrome and Firefox from one codebase**
+- The same code and the same `manifest.json` run in Chrome and Firefox (and Firefox-based browsers such as Zen)
+- Chrome runs `background.js` as a service worker; Firefox runs it as a background script. The only browser-specific line is the guarded `importScripts()` call at the top of `background.js`
+
+**Reliable delivery to Roll20**
+- Rolls are sent to your Roll20 **game** tab (`app.roll20.net/editor`), even if other roll20.net pages (forum, campaign page) are open; with several game tabs, the most recently used one is chosen
+- If no game chat is found, poke5e shows a red error instead of a false "Roll sent"
 
 **Other Bonus (Popup Settings)**
 - **Attack Bonus** — a flat bonus added to every attack to-hit roll (e.g. a `+2` item bonus)
@@ -87,8 +93,12 @@ No more copy-pasting formulas. Click a stat or move on your Pokemon sheet and th
 The same folder works in Firefox — there is one codebase and one `manifest.json` for both browsers.
 
 1. Open Firefox and go to `about:debugging#/runtime/this-firefox`
-2. Click **Load Temporary Add-on...** and select the `manifest.json` file
-3. Visit `https://poke5e.app/` as above
+2. If the store version is installed, disable it first (it uses the same add-on ID)
+3. Click **Load Temporary Add-on...** and select the `manifest.json` file
+4. **Grant site access:** open `about:addons` → **Extensions** → click **Pokemon 5e Roll20** → **Permissions** tab, and turn on access for `poke5e.app`, `roll20.net` and `app.roll20.net`. A temporary add-on does not get these automatically; without them the extension only runs in a tab after you click its toolbar icon
+5. Reload the poke5e.app and Roll20 tabs
+
+After code changes, click **Reload** on `about:debugging` (keeps the permissions) and reload both tabs. **Remove** + **Load Temporary Add-on** again counts as a new install, so step 4 is needed again.
 
 Chrome uses `background.service_worker` and ignores `background.scripts`; Firefox does the opposite. Chrome may show a harmless warning about the Firefox-only `browser_specific_settings` key.
 
@@ -97,9 +107,9 @@ Chrome uses `background.service_worker` and ignores `background.scripts`; Firefo
 
 1. Open both tabs:
    - `https://poke5e.app/` — your character sheet
-   - `https://roll20.net/` — your campaign
+   - `https://app.roll20.net/editor/` — your Roll20 game
 
-2. Click the extension icon in the toolbar and confirm **Roll20 Tab: Connected**
+2. Click the extension icon in the toolbar and confirm both tabs show **Connected**
 
 3. On your Pokemon sheet, hover over any ability, save, skill, or move name — a dice icon appears to the left
 
@@ -138,9 +148,19 @@ Click a move name to send a single Roll20 card with all fields at once.
 | DEX Save DC | 16 |
 | Damage (2d8+8) | `[[2d8+8]]` |
 
-**Info-only move** (no attack or DC): sends a card with Type, Time, Range, Duration, and Effect only.
+**Auto-hit move** (damage but no attack or DC, e.g. `Loudred | Disarming Voice`):
 
-If a natural 20 is rolled in the Attack field, a follow-up **Crit Bonus** card with doubled damage dice is sent automatically.
+| Field | Value |
+|---|---|
+| Damage (2d4+1) | `[[2d4+1]]` |
+| Type | Fairy |
+| Effect | *move description…* |
+
+Healing moves use a **Healing** field instead, e.g. `Healing (1d8+2) = [[1d8+2]]`.
+
+**Info-only move** (no roll at all): sends a card with Type, Time, Range, Duration, and Effect only.
+
+If a natural 20 is rolled in the Attack field, a follow-up **Crit Bonus** card rolls the damage dice once more (without the modifier) automatically.
 
 ### Other Bonus
 
@@ -163,8 +183,9 @@ Hold the modifier key **before** clicking:
 | Ctrl | Disadvantage | `2d20kl1` |
 | *(none)* | Normal | `1d20` |
 
-The card header will include `ADV` or `DIS` after the character name, e.g.:  
-`Scyther ADV | Quick Attack` — Attack field: `[[2d20kh1+7]]`
+The roll field gets an `(ADV)` or `(DIS)` label, e.g.:  
+`Scyther | Quick Attack` — `Attack (ADV) = [[2d20kh1+7]]`  
+`Scyther | STR save (DIS)` — `STR save (DIS) = [[2d20kl1+3]]`
 
 ## Troubleshooting
 
@@ -175,6 +196,11 @@ The card header will include `ADV` or `DIS` after the character name, e.g.:
 **Roll20 chat doesn't receive the roll**
 - Refresh the Roll20 tab and wait for the campaign to fully load
 - Check the extension popup — if Roll20 shows as disconnected, reload the Roll20 tab
+- Red message *"Roll20 game chat not found"*: open your game at `app.roll20.net/editor` and reload that tab
+- Red message *"Roll20 tab did not answer"*: the Roll20 tab was open before the extension was (re)loaded — reload it
+
+**Firefox: the extension only works after clicking its icon in each tab**
+- Site access is not granted. Open `about:addons` → **Pokemon 5e Roll20** → **Permissions** and turn on `poke5e.app`, `roll20.net` and `app.roll20.net`, then reload both tabs
 
 **Handlers disappear after switching Pokémon**
 - This should not happen — the extension watches for SPA navigation and reinjects automatically
@@ -192,14 +218,16 @@ Both content scripts log to the browser console prefixed with `[PKM5e Roll20 Ext
 [PKM5e Roll20 Extension] ✓ Attack handler injected: Bubble (toHit=5, damage=2d6+4)
 ```
 
-Open DevTools (F12) on poke5e.app or roll20.net to see them.
+Open DevTools (F12) on poke5e.app or roll20.net to see them. After an attack, the Roll20 tab logs `Crit check for "Scyther | Quick Attack": fullcrit = true/false`.
+
+The background script logs separately: in Chrome, click **service worker** on the extension's card in `chrome://extensions`; in Firefox, click **Inspect** next to the extension in `about:debugging`.
 
 ## Project Structure
 
 ```
 pkm5e-extension/
-├── manifest.json              # Extension manifest (Manifest V3)
-├── background.js              # Service worker — keepalive, settings storage (rolls bypass it)
+├── manifest.json              # Extension manifest (Manifest V3) — shared by Chrome and Firefox
+├── background.js              # Background — finds the Roll20 game tab and forwards rolls to it
 ├── README.md                  # This file
 │
 ├── content-scripts/
@@ -245,7 +273,7 @@ For attack cards: MutationObserver watches for natural 20, sends Crit Bonus card
 User sees formatted card in Roll20 chat
 ```
 
-> **Note:** The background service worker acts as a **message router** between the poke5e.app and Roll20 content scripts. It has no DOM access — it only looks up the Roll20 tab ID and forwards the request via `chrome.tabs.sendMessage`. It also handles `GET_BONUSES` (reads `chrome.storage.sync`) and the `alarms` keepalive.
+> **Note:** The background script acts as a **message router** between the poke5e.app and Roll20 content scripts. It has no DOM access — it only looks up the Roll20 game tab and forwards the request via `chrome.tabs.sendMessage`. It also handles `GET_BONUSES` (reads `chrome.storage.sync`). If Roll20 does not answer, the request is reported as failed.
 
 ### Message Flow
 
@@ -261,7 +289,7 @@ chrome.runtime.sendMessage({
     modifier: 5,
     totalModifier: 5,        // modifier + attackBonus/saveDcBonus from popup
     label: 'STR check',
-    characterName: { character: 'Scyther' },
+    characterName: 'Scyther',
     advantage: false,
     disadvantage: false
   }
@@ -284,10 +312,11 @@ chrome.runtime.sendMessage({
     moveName: 'Quick Attack',
     toHit: 7,                // already includes attackBonus from popup
     damageDice: '1d6',
+    damageLabel: 'Damage',   // or 'Healing'
     isSaveMove: false,
     moveType: 'Normal',
     moveRange: 'Melee',
-    characterName: { character: 'Scyther' }
+    characterName: 'Scyther'
   }
 })
 
@@ -320,14 +349,14 @@ The extension uses **CSS selectors** to identify and interact with poke5e.app el
    - Auto-reinjects handlers on Pokémon switch
    - Sends `ROLL_REQUEST` or `ATTACK_REQUEST` via `chrome.runtime.sendMessage` on click
 
-2. **background.js** — Service worker (Manifest V3)
-   - **Message router** — receives from poke5e.app content script, finds the Roll20 tab, and forwards via `chrome.tabs.sendMessage`
+2. **background.js** — Service worker in Chrome, background script in Firefox
+   - **Message router** — receives from poke5e.app content script, finds the Roll20 game tab (`app.roll20.net/editor`, most recently used first), and forwards via `chrome.tabs.sendMessage`
    - Handles `GET_BONUSES` (reads `attackBonus` / `saveDcBonus` from `chrome.storage.sync`)
-   - Handles `alarms` keepalive
+   - Handles `CHECK_STATUS` for the popup
 
 3. **roll20.js** — Content script on roll20.net
    - Listens for `EXECUTE_ROLL` and `EXECUTE_ATTACK` via `chrome.runtime.onMessage`
-   - Injects `&{template:default}` cards into Roll20 chat
+   - Injects `&{template:default}` cards into Roll20 chat via `sendChatCommand()`, which requires Roll20's chat Send button (`#chatSendBtn`) and fails otherwise
    - Uses MutationObserver to detect natural 20 and send a follow-up Crit Bonus card
 
 ### Critical Hit Detection
@@ -335,10 +364,11 @@ The extension uses **CSS selectors** to identify and interact with poke5e.app el
 After injecting an attack card, `watchForCritBonus` sets up a MutationObserver:
 
 1. Waits for **its own** template card to appear in the DOM (up to 10 s timeout) — the card's title must match the attack (e.g. `Scyther | Quick Attack`) and its first row must be the attack row (`Attack`, `Attack (ADV)` or `Attack (DIS)`); cards from other players are ignored
-2. Checks if the first `tbody` row's inline-roll result has the `.fullcrit` class (natural 20)
-3. If so, sends a follow-up `&{template:default}` card with doubled damage dice:  
+2. Each card is claimed by the first watcher that checks it, so attacking with the same move twice quickly checks two different cards
+3. Checks if the first `tbody` row's inline-roll result has the `.fullcrit` class (natural 20)
+4. If so, sends a follow-up `&{template:default}` card with the damage dice (no modifier):  
    `{{name=Scyther | Quick Attack}} {{Crit Bonus (1d6)=[[1d6]]}}`
-4. The observer disconnects after the first card is processed (or on timeout)
+5. The observer disconnects after its card is processed (or on timeout)
 
 ### SPA Navigation Detection
 
@@ -381,7 +411,8 @@ ClickInjector.showNotification(msg, type) // Display notification ('info', 'succ
   rollType: 'check' | 'save' | 'skill',  // Type of roll
   stat: 'STR' | 'Acrobatics' | ...,     // Ability or skill name
   modifier: 5,                            // Roll modifier
-  characterName: { character: 'Name' }   // Character context (optional)
+  advantage: false,                       // Shift held
+  disadvantage: false                     // Ctrl held
 }
 ```
 
@@ -439,7 +470,17 @@ This extension is released under the **MIT License**, which allows you to freely
 
 ## Changelog
 
-### Version 1.3 (Current)
+### Version 1.4 (Current)
+- ✨ **One codebase for Chrome and Firefox** — the separate `chrome` and `firefox` branches are merged; one `manifest.json` works in both browsers
+- ✨ **Auto-hit moves roll damage** — moves with damage but no attack or save DC (e.g. Disarming Voice, Dream Eater) now include the damage roll
+- ✨ **Healing label** — healing moves show a **Healing** field instead of **Damage**
+- 🐛 Fixed Firefox background script crashing on start (`importScripts` does not exist there), which silently dropped rolls
+- 🐛 Fixed rolls going to the wrong Roll20 tab (forum, campaign page) when several roll20.net tabs are open — the game tab is now preferred
+- 🐛 Fixed a false green "Roll sent" when the roll did not reach the Roll20 chat — a red error is shown instead
+- 🐛 Fixed crit bonus being sent for another player's natural 20, or twice when the same move was used twice quickly
+- 🧹 Click handlers now send the exact values read from the sheet (no second re-parse of the element text)
+
+### Version 1.3
 - ✨ **Roll20 card layout** — All rolls (ability checks, saves, skills, attacks, save DCs) now use Roll20's `&{template:default}` card format, displaying a header with the character and move name and labelled inline-roll fields
 - ✨ **Attack cards** — Single card with Attack and Damage inline rolls, plus Type/Range/Effect metadata
 - ✨ **Save DC cards** — Card showing the save type, DC value, and optional inline damage roll
