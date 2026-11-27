@@ -12,50 +12,26 @@ if (typeof importScripts === 'function') {
 }
 
 /**
- * Find an active Roll20 tab
+ * Find the Roll20 tab to send rolls to.
+ * Prefers the Roll20 game page (app.roll20.net/editor); if several are open, the most
+ * recently used one. Only if no game tab is open does it fall back to any roll20.net tab
+ * (which will then answer with a "game chat not found" error).
  * @returns {Promise<Object|null>} Tab object or null if not found
  */
 async function findRoll20Tab() {
+  const mostRecent = (tabs) =>
+    tabs.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0))[0] || null;
   try {
-    log('Querying for Roll20 tabs...');
-    
-    // Query for tabs matching Roll20 URLs
-    const tabs = await chrome.tabs.query({
-      url: ['*://roll20.net/*', '*://app.roll20.net/*']
-    });
-    
-    log('Tab query returned:', tabs.length, 'tabs');
-    
-    if (tabs && tabs.length > 0) {
-      const roll20Tab = tabs[0];
-      log('Found Roll20 tab:', roll20Tab.id, 'URL:', roll20Tab.url);
-      return roll20Tab;
+    const gameTabs = await chrome.tabs.query({ url: ['*://app.roll20.net/editor*'] });
+    if (gameTabs.length > 0) {
+      const tab = mostRecent(gameTabs);
+      log('Found Roll20 game tab:', tab.id, 'URL:', tab.url, `(${gameTabs.length} game tab(s) open)`);
+      return tab;
     }
-    
-    // Fallback: query all tabs and filter manually
-    log('No tabs found with URL filter, trying manual filter...');
-    const allTabs = await chrome.tabs.query({});
-    log('Total tabs found:', allTabs.length);
-    
-    const roll20Tab = allTabs.find(tab => {
-      const hasUrl = tab.url && typeof tab.url === 'string';
-      const isRoll20 = hasUrl && (
-        tab.url.includes('roll20.net') || 
-        tab.url.includes('app.roll20.net')
-      );
-      if (hasUrl) {
-        log('Tab:', tab.id, 'URL:', tab.url, 'isRoll20:', isRoll20);
-      }
-      return isRoll20;
-    });
-    
-    if (roll20Tab) {
-      log('Found Roll20 tab via manual filter:', roll20Tab.id);
-    } else {
-      log('No Roll20 tab found');
-    }
-    
-    return roll20Tab || null;
+    const anyTabs = await chrome.tabs.query({ url: ['*://roll20.net/*', '*://app.roll20.net/*'] });
+    const tab = mostRecent(anyTabs);
+    log(tab ? `No Roll20 game tab; falling back to ${tab.url}` : 'No Roll20 tab found');
+    return tab;
   } catch (error) {
     log('Error finding Roll20 tab:', error.message);
     return null;
@@ -134,7 +110,7 @@ async function sendRollToRoll20(rollData) {
     });
     
     log('✓ Roll20 response received:', response);
-    return response || { success: true, message: 'Roll sent' };
+    return response || { success: false, error: 'Roll20 tab did not answer. Reload the Roll20 tab and try again.' };
     
   } catch (error) {
     log('❌ Error sending roll to Roll20:', error.message);
@@ -182,7 +158,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           type: 'EXECUTE_ATTACK',
           data: request.data
         });
-        sendResponse(response || { success: true });
+        sendResponse(response || { success: false, error: 'Roll20 tab did not answer. Reload the Roll20 tab and try again.' });
       } catch (error) {
         log('Error in attack request handler:', error);
         sendResponse({ success: false, error: error.message });

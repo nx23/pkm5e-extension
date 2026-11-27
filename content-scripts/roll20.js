@@ -6,6 +6,9 @@
 log('Content script loaded on Roll20');
 
 const Roll20Integration = (() => {
+  const NOT_A_GAME_TAB_ERROR =
+    'Roll20 game chat not found. Open your game (app.roll20.net/editor) and reload that tab.';
+
   /**
    * Find the chat input element
    * Tries multiple selectors for different Roll20 versions
@@ -63,6 +66,29 @@ const Roll20Integration = (() => {
   }
 
   /**
+   * Put a command in the Roll20 chat box and press Send.
+   * Only works on the Roll20 game page, which has the chat Send button (#chatSendBtn).
+   * On any other roll20.net page (forum, campaign details...) this fails, instead of
+   * typing the roll into some unrelated text box and reporting success.
+   * @param {string} command - Chat command / template text
+   * @returns {boolean} true if the command was sent
+   */
+  function sendChatCommand(command) {
+    const sendButton = document.querySelector('#chatSendBtn');
+    const chatInput = sendButton ? findChatInput() : null;
+    if (!sendButton || !chatInput) {
+      log('❌ This tab is not a Roll20 game page (no chat Send button / chat input)');
+      showNotification('❌ Roll20 game chat not found in this tab', 'error');
+      return false;
+    }
+    chatInput.value = command;
+    chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+    chatInput.dispatchEvent(new Event('change', { bubbles: true }));
+    sendButton.click();
+    return true;
+  }
+
+  /**
    * Send a Save DC message as a formatted Roll20 template card (no /roll)
    * @param {Object} opts
    * @returns {boolean} Success status
@@ -83,18 +109,7 @@ const Roll20Integration = (() => {
     if (moveDuration) message += ` {{Duration=${sanitizeForTemplate(moveDuration)}}}`;
     if (moveDescription) message += ` {{Effect=${sanitizeForTemplate(moveDescription)}}}`;
 
-    const chatInput = findChatInput();
-    if (!chatInput) {
-      log('❌ Could not find chat input for Save DC card');
-      return false;
-    }
-
-    chatInput.value = message;
-    chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-    chatInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-    const sendButton = document.querySelector('#chatSendBtn');
-    if (sendButton) sendButton.click();
+    if (!sendChatCommand(message)) return false;
 
     log(`✓ Save DC card sent: ${moveName} | ${saveType} Save DC ${saveDC}`);
     showNotification(`✓ Save DC ${saveDC} sent to chat`, 'success');
@@ -112,13 +127,6 @@ const Roll20Integration = (() => {
     if (!rollData || !rollData.stat) {
       log('⚠️ Invalid roll data:', rollData);
       showNotification('Invalid roll data', 'error');
-      return false;
-    }
-
-    const chatInput = findChatInput();
-    if (!chatInput) {
-      log('❌ ERROR: Could not find chat input element');
-      showNotification('❌ Could not find Roll20 chat input', 'error');
       return false;
     }
 
@@ -143,12 +151,7 @@ const Roll20Integration = (() => {
 
     const command = `&{template:default} {{name=${cardName}}} {{${fieldLabel}=[[${diceFormula}]]}}`;
 
-    chatInput.value = command;
-    chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-    chatInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-    const sendButton = document.querySelector('#chatSendBtn');
-    if (sendButton) sendButton.click();
+    if (!sendChatCommand(command)) return false;
 
     log(`✓ Roll card sent: ${command}`);
     showNotification('✓ Roll sent to chat', 'success');
@@ -258,14 +261,8 @@ const Roll20Integration = (() => {
   }
 
   function sendCritBonus(cardName, bonusDice) {
-    const chatInput = findChatInput();
-    if (!chatInput) return;
     const cmd = `&{template:default} {{name=${cardName}}} {{Crit Bonus (${bonusDice})=[[${bonusDice}]]}}`;
-    chatInput.value = cmd;
-    chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-    chatInput.dispatchEvent(new Event('change', { bubbles: true }));
-    const sendBtn = document.querySelector('#chatSendBtn');
-    if (sendBtn) sendBtn.click();
+    if (!sendChatCommand(cmd)) return;
     log('✓ Crit bonus damage sent:', cmd);
   }
 
@@ -275,9 +272,6 @@ const Roll20Integration = (() => {
    * @returns {boolean} Success status
    */
   function injectAttackTemplate({ moveName, characterName, toHit, damageDice, advantage, disadvantage, moveType, moveTime, moveRange, moveDuration, moveDescription }) {
-    const chatInput = findChatInput();
-    if (!chatInput) return false;
-
     const charDisplay = characterName
       ? (typeof characterName === 'object' ? characterName.character : characterName)
       : null;
@@ -302,11 +296,7 @@ const Roll20Integration = (() => {
     if (moveDuration) command += ` {{Duration=${sanitizeForTemplate(moveDuration)}}}`;
     if (moveDescription) command += ` {{Effect=${sanitizeForTemplate(moveDescription)}}}`;
 
-    chatInput.value = command;
-    chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-    chatInput.dispatchEvent(new Event('change', { bubbles: true }));
-    const sendButton = document.querySelector('#chatSendBtn');
-    if (sendButton) sendButton.click();
+    if (!sendChatCommand(command)) return false;
 
     // Watch for a natural 20 and send bonus crit dice if needed
     if (damageDice) {
@@ -324,9 +314,6 @@ const Roll20Integration = (() => {
    * @returns {boolean} Success status
    */
   function injectInfoCard({ moveName, characterName, moveType, moveTime, moveRange, moveDuration, moveDescription }) {
-    const chatInput = findChatInput();
-    if (!chatInput) return false;
-
     const charDisplay = characterName
       ? (typeof characterName === 'object' ? characterName.character : characterName)
       : null;
@@ -339,11 +326,7 @@ const Roll20Integration = (() => {
     if (moveDuration) command += ` {{Duration=${sanitizeForTemplate(moveDuration)}}}`;
     if (moveDescription) command += ` {{Effect=${sanitizeForTemplate(moveDescription)}}}`;
 
-    chatInput.value = command;
-    chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-    chatInput.dispatchEvent(new Event('change', { bubbles: true }));
-    const sendButton = document.querySelector('#chatSendBtn');
-    if (sendButton) sendButton.click();
+    if (!sendChatCommand(command)) return false;
 
     log(`✓ Info card sent: ${moveName}`);
     showNotification(`✓ ${moveName} sent to chat`, 'success');
@@ -365,6 +348,7 @@ const Roll20Integration = (() => {
           const response = {
             success: success,
             message: success ? '✓ Roll injected' : '✗ Failed to inject roll',
+            error: success ? undefined : NOT_A_GAME_TAB_ERROR,
             data: request.data
           };
           log('Sending response:', response);
@@ -418,7 +402,7 @@ const Roll20Integration = (() => {
             success = injectInfoCard({ moveName, characterName, moveType, moveTime, moveRange, moveDuration, moveDescription });
           }
 
-          sendResponse({ success });
+          sendResponse({ success, error: success ? undefined : NOT_A_GAME_TAB_ERROR });
         } catch (error) {
           log('❌ Error processing attack:', error.message);
           sendResponse({ success: false, message: `Error: ${error.message}` });
