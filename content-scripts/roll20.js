@@ -195,6 +195,9 @@ const Roll20Integration = (() => {
    * Only a card whose title equals cardName (e.g. "Scyther | Quick Attack") and whose
    * first row is fieldLabel (e.g. "Attack (ADV)") counts. Cards from other players,
    * or other rolls that land in chat first, are ignored and the watcher keeps waiting.
+   *
+   * Each card is claimed by the first watcher that checks it, so when the same move is
+   * sent twice quickly, each watcher checks a different card (not both the first one).
    */
   function watchForCritBonus({ cardName, fieldLabel, damageDice }) {
     // Extract only the dice part (e.g. "2d8+3" → "2d8") — crit bonus has no modifier
@@ -207,6 +210,7 @@ const Roll20Integration = (() => {
 
     // Is this <table> the card we just sent?
     function isOurCard(table) {
+      if (table.dataset.pkm5eCritChecked) return false; // already claimed by another watcher
       // Roll20's default template renders {{name=...}} as the table <caption>
       const title = normalize(table.querySelector('caption')?.textContent);
       if (title !== expectedName) return false;
@@ -237,6 +241,7 @@ const Roll20Integration = (() => {
             const firstTdRoll = table.querySelector('tbody tr:first-child .inlinerollresult');
             if (!firstTdRoll) continue;
 
+            table.dataset.pkm5eCritChecked = '1';
             observer.disconnect();
             clearTimeout(giveUpTimer);
 
